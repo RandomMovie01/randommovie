@@ -133412,8 +133412,8 @@ function getLanguageFromCountryCode(countryCode) {
 // src/rest/geolocation.rest.ts
 var PATH9 = "geolocation";
 function setup10() {
-  app.get(`/${PATH9}/:ip`, asyncHandler(async (req, res) => {
-    const ip = req.params["ip"];
+  app.get(`/${PATH9}`, asyncHandler(async (req, res) => {
+    const ip = req.ip;
     if (ip !== void 0) {
       const ipApiResponse = await axios_default.get(`${IP_API_ENDPOINT}${ip}`);
       const location2 = new LocationDto();
