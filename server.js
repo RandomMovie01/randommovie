@@ -134118,6 +134118,7 @@ var SessionMovieCacheService = class {
     }
     session2.failures++;
     if (session2.failures >= this.maxFailures) {
+      session2.createdAt = /* @__PURE__ */ new Date();
       session2.failures = 0;
       session2.ids.clear();
     }
