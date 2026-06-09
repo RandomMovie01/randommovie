@@ -33,6 +33,364 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// node_modules/dotenv/package.json
+var require_package = __commonJS({
+  "node_modules/dotenv/package.json"(exports2, module2) {
+    module2.exports = {
+      name: "dotenv",
+      version: "16.6.1",
+      description: "Loads environment variables from .env file",
+      main: "lib/main.js",
+      types: "lib/main.d.ts",
+      exports: {
+        ".": {
+          types: "./lib/main.d.ts",
+          require: "./lib/main.js",
+          default: "./lib/main.js"
+        },
+        "./config": "./config.js",
+        "./config.js": "./config.js",
+        "./lib/env-options": "./lib/env-options.js",
+        "./lib/env-options.js": "./lib/env-options.js",
+        "./lib/cli-options": "./lib/cli-options.js",
+        "./lib/cli-options.js": "./lib/cli-options.js",
+        "./package.json": "./package.json"
+      },
+      scripts: {
+        "dts-check": "tsc --project tests/types/tsconfig.json",
+        lint: "standard",
+        pretest: "npm run lint && npm run dts-check",
+        test: "tap run --allow-empty-coverage --disable-coverage --timeout=60000",
+        "test:coverage": "tap run --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov",
+        prerelease: "npm test",
+        release: "standard-version"
+      },
+      repository: {
+        type: "git",
+        url: "git://github.com/motdotla/dotenv.git"
+      },
+      homepage: "https://github.com/motdotla/dotenv#readme",
+      funding: "https://dotenvx.com",
+      keywords: [
+        "dotenv",
+        "env",
+        ".env",
+        "environment",
+        "variables",
+        "config",
+        "settings"
+      ],
+      readmeFilename: "README.md",
+      license: "BSD-2-Clause",
+      devDependencies: {
+        "@types/node": "^18.11.3",
+        decache: "^4.6.2",
+        sinon: "^14.0.1",
+        standard: "^17.0.0",
+        "standard-version": "^9.5.0",
+        tap: "^19.2.0",
+        typescript: "^4.8.4"
+      },
+      engines: {
+        node: ">=12"
+      },
+      browser: {
+        fs: false
+      }
+    };
+  }
+});
+
+// node_modules/dotenv/lib/main.js
+var require_main = __commonJS({
+  "node_modules/dotenv/lib/main.js"(exports2, module2) {
+    var fs3 = require("fs");
+    var path3 = require("path");
+    var os = require("os");
+    var crypto10 = require("crypto");
+    var packageJson = require_package();
+    var version2 = packageJson.version;
+    var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
+    function parse8(src) {
+      const obj = {};
+      let lines = src.toString();
+      lines = lines.replace(/\r\n?/mg, "\n");
+      let match;
+      while ((match = LINE.exec(lines)) != null) {
+        const key = match[1];
+        let value = match[2] || "";
+        value = value.trim();
+        const maybeQuote = value[0];
+        value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
+        if (maybeQuote === '"') {
+          value = value.replace(/\\n/g, "\n");
+          value = value.replace(/\\r/g, "\r");
+        }
+        obj[key] = value;
+      }
+      return obj;
+    }
+    function _parseVault(options) {
+      options = options || {};
+      const vaultPath = _vaultPath(options);
+      options.path = vaultPath;
+      const result = DotenvModule.configDotenv(options);
+      if (!result.parsed) {
+        const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
+        err.code = "MISSING_DATA";
+        throw err;
+      }
+      const keys = _dotenvKey(options).split(",");
+      const length = keys.length;
+      let decrypted;
+      for (let i = 0; i < length; i++) {
+        try {
+          const key = keys[i].trim();
+          const attrs = _instructions(result, key);
+          decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
+          break;
+        } catch (error48) {
+          if (i + 1 >= length) {
+            throw error48;
+          }
+        }
+      }
+      return DotenvModule.parse(decrypted);
+    }
+    function _warn(message) {
+      console.log(`[dotenv@${version2}][WARN] ${message}`);
+    }
+    function _debug(message) {
+      console.log(`[dotenv@${version2}][DEBUG] ${message}`);
+    }
+    function _log(message) {
+      console.log(`[dotenv@${version2}] ${message}`);
+    }
+    function _dotenvKey(options) {
+      if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
+        return options.DOTENV_KEY;
+      }
+      if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
+        return process.env.DOTENV_KEY;
+      }
+      return "";
+    }
+    function _instructions(result, dotenvKey) {
+      let uri2;
+      try {
+        uri2 = new URL(dotenvKey);
+      } catch (error48) {
+        if (error48.code === "ERR_INVALID_URL") {
+          const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
+          err.code = "INVALID_DOTENV_KEY";
+          throw err;
+        }
+        throw error48;
+      }
+      const key = uri2.password;
+      if (!key) {
+        const err = new Error("INVALID_DOTENV_KEY: Missing key part");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      const environment = uri2.searchParams.get("environment");
+      if (!environment) {
+        const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
+        err.code = "INVALID_DOTENV_KEY";
+        throw err;
+      }
+      const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
+      const ciphertext = result.parsed[environmentKey];
+      if (!ciphertext) {
+        const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
+        err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
+        throw err;
+      }
+      return { ciphertext, key };
+    }
+    function _vaultPath(options) {
+      let possibleVaultPath = null;
+      if (options && options.path && options.path.length > 0) {
+        if (Array.isArray(options.path)) {
+          for (const filepath of options.path) {
+            if (fs3.existsSync(filepath)) {
+              possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
+            }
+          }
+        } else {
+          possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
+        }
+      } else {
+        possibleVaultPath = path3.resolve(process.cwd(), ".env.vault");
+      }
+      if (fs3.existsSync(possibleVaultPath)) {
+        return possibleVaultPath;
+      }
+      return null;
+    }
+    function _resolveHome(envPath) {
+      return envPath[0] === "~" ? path3.join(os.homedir(), envPath.slice(1)) : envPath;
+    }
+    function _configVault(options) {
+      const debug2 = Boolean(options && options.debug);
+      const quiet = options && "quiet" in options ? options.quiet : true;
+      if (debug2 || !quiet) {
+        _log("Loading env from encrypted .env.vault");
+      }
+      const parsed = DotenvModule._parseVault(options);
+      let processEnv = process.env;
+      if (options && options.processEnv != null) {
+        processEnv = options.processEnv;
+      }
+      DotenvModule.populate(processEnv, parsed, options);
+      return { parsed };
+    }
+    function configDotenv(options) {
+      const dotenvPath = path3.resolve(process.cwd(), ".env");
+      let encoding = "utf8";
+      const debug2 = Boolean(options && options.debug);
+      const quiet = options && "quiet" in options ? options.quiet : true;
+      if (options && options.encoding) {
+        encoding = options.encoding;
+      } else {
+        if (debug2) {
+          _debug("No encoding is specified. UTF-8 is used by default");
+        }
+      }
+      let optionPaths = [dotenvPath];
+      if (options && options.path) {
+        if (!Array.isArray(options.path)) {
+          optionPaths = [_resolveHome(options.path)];
+        } else {
+          optionPaths = [];
+          for (const filepath of options.path) {
+            optionPaths.push(_resolveHome(filepath));
+          }
+        }
+      }
+      let lastError;
+      const parsedAll = {};
+      for (const path4 of optionPaths) {
+        try {
+          const parsed = DotenvModule.parse(fs3.readFileSync(path4, { encoding }));
+          DotenvModule.populate(parsedAll, parsed, options);
+        } catch (e) {
+          if (debug2) {
+            _debug(`Failed to load ${path4} ${e.message}`);
+          }
+          lastError = e;
+        }
+      }
+      let processEnv = process.env;
+      if (options && options.processEnv != null) {
+        processEnv = options.processEnv;
+      }
+      DotenvModule.populate(processEnv, parsedAll, options);
+      if (debug2 || !quiet) {
+        const keysCount = Object.keys(parsedAll).length;
+        const shortPaths = [];
+        for (const filePath of optionPaths) {
+          try {
+            const relative = path3.relative(process.cwd(), filePath);
+            shortPaths.push(relative);
+          } catch (e) {
+            if (debug2) {
+              _debug(`Failed to load ${filePath} ${e.message}`);
+            }
+            lastError = e;
+          }
+        }
+        _log(`injecting env (${keysCount}) from ${shortPaths.join(",")}`);
+      }
+      if (lastError) {
+        return { parsed: parsedAll, error: lastError };
+      } else {
+        return { parsed: parsedAll };
+      }
+    }
+    function config4(options) {
+      if (_dotenvKey(options).length === 0) {
+        return DotenvModule.configDotenv(options);
+      }
+      const vaultPath = _vaultPath(options);
+      if (!vaultPath) {
+        _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
+        return DotenvModule.configDotenv(options);
+      }
+      return DotenvModule._configVault(options);
+    }
+    function decrypt(encrypted, keyStr) {
+      const key = Buffer.from(keyStr.slice(-64), "hex");
+      let ciphertext = Buffer.from(encrypted, "base64");
+      const nonce = ciphertext.subarray(0, 12);
+      const authTag = ciphertext.subarray(-16);
+      ciphertext = ciphertext.subarray(12, -16);
+      try {
+        const aesgcm = crypto10.createDecipheriv("aes-256-gcm", key, nonce);
+        aesgcm.setAuthTag(authTag);
+        return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
+      } catch (error48) {
+        const isRange = error48 instanceof RangeError;
+        const invalidKeyLength = error48.message === "Invalid key length";
+        const decryptionFailed = error48.message === "Unsupported state or unable to authenticate data";
+        if (isRange || invalidKeyLength) {
+          const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
+          err.code = "INVALID_DOTENV_KEY";
+          throw err;
+        } else if (decryptionFailed) {
+          const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
+          err.code = "DECRYPTION_FAILED";
+          throw err;
+        } else {
+          throw error48;
+        }
+      }
+    }
+    function populate(processEnv, parsed, options = {}) {
+      const debug2 = Boolean(options && options.debug);
+      const override = Boolean(options && options.override);
+      if (typeof parsed !== "object") {
+        const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
+        err.code = "OBJECT_REQUIRED";
+        throw err;
+      }
+      for (const key of Object.keys(parsed)) {
+        if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
+          if (override === true) {
+            processEnv[key] = parsed[key];
+          }
+          if (debug2) {
+            if (override === true) {
+              _debug(`"${key}" is already defined and WAS overwritten`);
+            } else {
+              _debug(`"${key}" is already defined and was NOT overwritten`);
+            }
+          }
+        } else {
+          processEnv[key] = parsed[key];
+        }
+      }
+    }
+    var DotenvModule = {
+      configDotenv,
+      _configVault,
+      _parseVault,
+      config: config4,
+      decrypt,
+      parse: parse8,
+      populate
+    };
+    module2.exports.configDotenv = DotenvModule.configDotenv;
+    module2.exports._configVault = DotenvModule._configVault;
+    module2.exports._parseVault = DotenvModule._parseVault;
+    module2.exports.config = DotenvModule.config;
+    module2.exports.decrypt = DotenvModule.decrypt;
+    module2.exports.parse = DotenvModule.parse;
+    module2.exports.populate = DotenvModule.populate;
+    module2.exports = DotenvModule;
+  }
+});
+
 // node_modules/depd/index.js
 var require_depd = __commonJS({
   "node_modules/depd/index.js"(exports2, module2) {
@@ -1216,7 +1574,7 @@ var require_node = __commonJS({
     var tty = require("tty");
     var util4 = require("util");
     exports2 = module2.exports = require_debug();
-    exports2.init = init;
+    exports2.init = init4;
     exports2.log = log;
     exports2.formatArgs = formatArgs;
     exports2.save = save9;
@@ -1319,7 +1677,7 @@ var require_node = __commonJS({
       stream5._isStdio = true;
       return stream5;
     }
-    function init(debug2) {
+    function init4(debug2) {
       debug2.inspectOpts = {};
       var keys = Object.keys(exports2.inspectOpts);
       for (var i = 0; i < keys.length; i++) {
@@ -20608,7 +20966,7 @@ var require_application = __commonJS({
     var slice = Array.prototype.slice;
     var app2 = exports2 = module2.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
-    app2.init = function init() {
+    app2.init = function init4() {
       this.cache = {};
       this.engines = {};
       this.settings = {};
@@ -22586,364 +22944,6 @@ var require_express2 = __commonJS({
   }
 });
 
-// node_modules/dotenv/package.json
-var require_package = __commonJS({
-  "node_modules/dotenv/package.json"(exports2, module2) {
-    module2.exports = {
-      name: "dotenv",
-      version: "16.6.1",
-      description: "Loads environment variables from .env file",
-      main: "lib/main.js",
-      types: "lib/main.d.ts",
-      exports: {
-        ".": {
-          types: "./lib/main.d.ts",
-          require: "./lib/main.js",
-          default: "./lib/main.js"
-        },
-        "./config": "./config.js",
-        "./config.js": "./config.js",
-        "./lib/env-options": "./lib/env-options.js",
-        "./lib/env-options.js": "./lib/env-options.js",
-        "./lib/cli-options": "./lib/cli-options.js",
-        "./lib/cli-options.js": "./lib/cli-options.js",
-        "./package.json": "./package.json"
-      },
-      scripts: {
-        "dts-check": "tsc --project tests/types/tsconfig.json",
-        lint: "standard",
-        pretest: "npm run lint && npm run dts-check",
-        test: "tap run --allow-empty-coverage --disable-coverage --timeout=60000",
-        "test:coverage": "tap run --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov",
-        prerelease: "npm test",
-        release: "standard-version"
-      },
-      repository: {
-        type: "git",
-        url: "git://github.com/motdotla/dotenv.git"
-      },
-      homepage: "https://github.com/motdotla/dotenv#readme",
-      funding: "https://dotenvx.com",
-      keywords: [
-        "dotenv",
-        "env",
-        ".env",
-        "environment",
-        "variables",
-        "config",
-        "settings"
-      ],
-      readmeFilename: "README.md",
-      license: "BSD-2-Clause",
-      devDependencies: {
-        "@types/node": "^18.11.3",
-        decache: "^4.6.2",
-        sinon: "^14.0.1",
-        standard: "^17.0.0",
-        "standard-version": "^9.5.0",
-        tap: "^19.2.0",
-        typescript: "^4.8.4"
-      },
-      engines: {
-        node: ">=12"
-      },
-      browser: {
-        fs: false
-      }
-    };
-  }
-});
-
-// node_modules/dotenv/lib/main.js
-var require_main = __commonJS({
-  "node_modules/dotenv/lib/main.js"(exports2, module2) {
-    var fs3 = require("fs");
-    var path3 = require("path");
-    var os = require("os");
-    var crypto10 = require("crypto");
-    var packageJson = require_package();
-    var version2 = packageJson.version;
-    var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg;
-    function parse8(src) {
-      const obj = {};
-      let lines = src.toString();
-      lines = lines.replace(/\r\n?/mg, "\n");
-      let match;
-      while ((match = LINE.exec(lines)) != null) {
-        const key = match[1];
-        let value = match[2] || "";
-        value = value.trim();
-        const maybeQuote = value[0];
-        value = value.replace(/^(['"`])([\s\S]*)\1$/mg, "$2");
-        if (maybeQuote === '"') {
-          value = value.replace(/\\n/g, "\n");
-          value = value.replace(/\\r/g, "\r");
-        }
-        obj[key] = value;
-      }
-      return obj;
-    }
-    function _parseVault(options) {
-      options = options || {};
-      const vaultPath = _vaultPath(options);
-      options.path = vaultPath;
-      const result = DotenvModule.configDotenv(options);
-      if (!result.parsed) {
-        const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`);
-        err.code = "MISSING_DATA";
-        throw err;
-      }
-      const keys = _dotenvKey(options).split(",");
-      const length = keys.length;
-      let decrypted;
-      for (let i = 0; i < length; i++) {
-        try {
-          const key = keys[i].trim();
-          const attrs = _instructions(result, key);
-          decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key);
-          break;
-        } catch (error48) {
-          if (i + 1 >= length) {
-            throw error48;
-          }
-        }
-      }
-      return DotenvModule.parse(decrypted);
-    }
-    function _warn(message) {
-      console.log(`[dotenv@${version2}][WARN] ${message}`);
-    }
-    function _debug(message) {
-      console.log(`[dotenv@${version2}][DEBUG] ${message}`);
-    }
-    function _log(message) {
-      console.log(`[dotenv@${version2}] ${message}`);
-    }
-    function _dotenvKey(options) {
-      if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-        return options.DOTENV_KEY;
-      }
-      if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-        return process.env.DOTENV_KEY;
-      }
-      return "";
-    }
-    function _instructions(result, dotenvKey) {
-      let uri2;
-      try {
-        uri2 = new URL(dotenvKey);
-      } catch (error48) {
-        if (error48.code === "ERR_INVALID_URL") {
-          const err = new Error("INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development");
-          err.code = "INVALID_DOTENV_KEY";
-          throw err;
-        }
-        throw error48;
-      }
-      const key = uri2.password;
-      if (!key) {
-        const err = new Error("INVALID_DOTENV_KEY: Missing key part");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      const environment = uri2.searchParams.get("environment");
-      if (!environment) {
-        const err = new Error("INVALID_DOTENV_KEY: Missing environment part");
-        err.code = "INVALID_DOTENV_KEY";
-        throw err;
-      }
-      const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`;
-      const ciphertext = result.parsed[environmentKey];
-      if (!ciphertext) {
-        const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`);
-        err.code = "NOT_FOUND_DOTENV_ENVIRONMENT";
-        throw err;
-      }
-      return { ciphertext, key };
-    }
-    function _vaultPath(options) {
-      let possibleVaultPath = null;
-      if (options && options.path && options.path.length > 0) {
-        if (Array.isArray(options.path)) {
-          for (const filepath of options.path) {
-            if (fs3.existsSync(filepath)) {
-              possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
-            }
-          }
-        } else {
-          possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
-        }
-      } else {
-        possibleVaultPath = path3.resolve(process.cwd(), ".env.vault");
-      }
-      if (fs3.existsSync(possibleVaultPath)) {
-        return possibleVaultPath;
-      }
-      return null;
-    }
-    function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path3.join(os.homedir(), envPath.slice(1)) : envPath;
-    }
-    function _configVault(options) {
-      const debug2 = Boolean(options && options.debug);
-      const quiet = options && "quiet" in options ? options.quiet : true;
-      if (debug2 || !quiet) {
-        _log("Loading env from encrypted .env.vault");
-      }
-      const parsed = DotenvModule._parseVault(options);
-      let processEnv = process.env;
-      if (options && options.processEnv != null) {
-        processEnv = options.processEnv;
-      }
-      DotenvModule.populate(processEnv, parsed, options);
-      return { parsed };
-    }
-    function configDotenv(options) {
-      const dotenvPath = path3.resolve(process.cwd(), ".env");
-      let encoding = "utf8";
-      const debug2 = Boolean(options && options.debug);
-      const quiet = options && "quiet" in options ? options.quiet : true;
-      if (options && options.encoding) {
-        encoding = options.encoding;
-      } else {
-        if (debug2) {
-          _debug("No encoding is specified. UTF-8 is used by default");
-        }
-      }
-      let optionPaths = [dotenvPath];
-      if (options && options.path) {
-        if (!Array.isArray(options.path)) {
-          optionPaths = [_resolveHome(options.path)];
-        } else {
-          optionPaths = [];
-          for (const filepath of options.path) {
-            optionPaths.push(_resolveHome(filepath));
-          }
-        }
-      }
-      let lastError;
-      const parsedAll = {};
-      for (const path4 of optionPaths) {
-        try {
-          const parsed = DotenvModule.parse(fs3.readFileSync(path4, { encoding }));
-          DotenvModule.populate(parsedAll, parsed, options);
-        } catch (e) {
-          if (debug2) {
-            _debug(`Failed to load ${path4} ${e.message}`);
-          }
-          lastError = e;
-        }
-      }
-      let processEnv = process.env;
-      if (options && options.processEnv != null) {
-        processEnv = options.processEnv;
-      }
-      DotenvModule.populate(processEnv, parsedAll, options);
-      if (debug2 || !quiet) {
-        const keysCount = Object.keys(parsedAll).length;
-        const shortPaths = [];
-        for (const filePath of optionPaths) {
-          try {
-            const relative = path3.relative(process.cwd(), filePath);
-            shortPaths.push(relative);
-          } catch (e) {
-            if (debug2) {
-              _debug(`Failed to load ${filePath} ${e.message}`);
-            }
-            lastError = e;
-          }
-        }
-        _log(`injecting env (${keysCount}) from ${shortPaths.join(",")}`);
-      }
-      if (lastError) {
-        return { parsed: parsedAll, error: lastError };
-      } else {
-        return { parsed: parsedAll };
-      }
-    }
-    function config6(options) {
-      if (_dotenvKey(options).length === 0) {
-        return DotenvModule.configDotenv(options);
-      }
-      const vaultPath = _vaultPath(options);
-      if (!vaultPath) {
-        _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`);
-        return DotenvModule.configDotenv(options);
-      }
-      return DotenvModule._configVault(options);
-    }
-    function decrypt(encrypted, keyStr) {
-      const key = Buffer.from(keyStr.slice(-64), "hex");
-      let ciphertext = Buffer.from(encrypted, "base64");
-      const nonce = ciphertext.subarray(0, 12);
-      const authTag = ciphertext.subarray(-16);
-      ciphertext = ciphertext.subarray(12, -16);
-      try {
-        const aesgcm = crypto10.createDecipheriv("aes-256-gcm", key, nonce);
-        aesgcm.setAuthTag(authTag);
-        return `${aesgcm.update(ciphertext)}${aesgcm.final()}`;
-      } catch (error48) {
-        const isRange = error48 instanceof RangeError;
-        const invalidKeyLength = error48.message === "Invalid key length";
-        const decryptionFailed = error48.message === "Unsupported state or unable to authenticate data";
-        if (isRange || invalidKeyLength) {
-          const err = new Error("INVALID_DOTENV_KEY: It must be 64 characters long (or more)");
-          err.code = "INVALID_DOTENV_KEY";
-          throw err;
-        } else if (decryptionFailed) {
-          const err = new Error("DECRYPTION_FAILED: Please check your DOTENV_KEY");
-          err.code = "DECRYPTION_FAILED";
-          throw err;
-        } else {
-          throw error48;
-        }
-      }
-    }
-    function populate(processEnv, parsed, options = {}) {
-      const debug2 = Boolean(options && options.debug);
-      const override = Boolean(options && options.override);
-      if (typeof parsed !== "object") {
-        const err = new Error("OBJECT_REQUIRED: Please check the processEnv argument being passed to populate");
-        err.code = "OBJECT_REQUIRED";
-        throw err;
-      }
-      for (const key of Object.keys(parsed)) {
-        if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-          if (override === true) {
-            processEnv[key] = parsed[key];
-          }
-          if (debug2) {
-            if (override === true) {
-              _debug(`"${key}" is already defined and WAS overwritten`);
-            } else {
-              _debug(`"${key}" is already defined and was NOT overwritten`);
-            }
-          }
-        } else {
-          processEnv[key] = parsed[key];
-        }
-      }
-    }
-    var DotenvModule = {
-      configDotenv,
-      _configVault,
-      _parseVault,
-      config: config6,
-      decrypt,
-      parse: parse8,
-      populate
-    };
-    module2.exports.configDotenv = DotenvModule.configDotenv;
-    module2.exports._configVault = DotenvModule._configVault;
-    module2.exports._parseVault = DotenvModule._parseVault;
-    module2.exports.config = DotenvModule.config;
-    module2.exports.decrypt = DotenvModule.decrypt;
-    module2.exports.parse = DotenvModule.parse;
-    module2.exports.populate = DotenvModule.populate;
-    module2.exports = DotenvModule;
-  }
-});
-
 // node_modules/sql-escaper/lib/index.js
 var require_lib3 = __commonJS({
   "node_modules/sql-escaper/lib/index.js"(exports2) {
@@ -23545,16 +23545,16 @@ var require_parser_cache = __commonJS({
     var parserCache = createLRU({
       max: 15e3
     });
-    function keyFromFields(type, fields, options, config6) {
+    function keyFromFields(type, fields, options, config4) {
       const res = [
         type,
         typeof options.nestTables,
         options.nestTables,
         Boolean(options.rowsAsArray),
-        Boolean(options.supportBigNumbers || config6.supportBigNumbers),
-        Boolean(options.bigNumberStrings || config6.bigNumberStrings),
+        Boolean(options.supportBigNumbers || config4.supportBigNumbers),
+        Boolean(options.bigNumberStrings || config4.bigNumberStrings),
         typeof options.typeCast === "boolean" ? options.typeCast : typeof options.typeCast,
-        options.timezone || config6.timezone,
+        options.timezone || config4.timezone,
         Boolean(options.decimalNumbers),
         options.dateStrings
       ];
@@ -23572,13 +23572,13 @@ var require_parser_cache = __commonJS({
       }
       return JSON.stringify(res, null, 0);
     }
-    function getParser(type, fields, options, config6, compiler) {
-      const key = keyFromFields(type, fields, options, config6);
+    function getParser(type, fields, options, config4, compiler) {
+      const key = keyFromFields(type, fields, options, config4);
       let parser = parserCache.get(key);
       if (parser) {
         return parser;
       }
-      parser = compiler(fields, options, config6);
+      parser = compiler(fields, options, config4);
       parserCache.set(key, parser);
       return parser;
     }
@@ -37195,15 +37195,15 @@ var require_text_parser = __commonJS({
     for (const t in Types) {
       typeNames[Types[t]] = t;
     }
-    function readCodeFor(type, charset, encodingExpr, config6, options) {
+    function readCodeFor(type, charset, encodingExpr, config4, options) {
       const supportBigNumbers = Boolean(
-        options.supportBigNumbers || config6.supportBigNumbers
+        options.supportBigNumbers || config4.supportBigNumbers
       );
       const bigNumberStrings = Boolean(
-        options.bigNumberStrings || config6.bigNumberStrings
+        options.bigNumberStrings || config4.bigNumberStrings
       );
-      const timezone = options.timezone || config6.timezone;
-      const dateStrings = options.dateStrings || config6.dateStrings;
+      const timezone = options.timezone || config4.timezone;
+      const dateStrings = options.dateStrings || config4.dateStrings;
       switch (type) {
         case Types.TINY:
         case Types.SHORT:
@@ -37223,7 +37223,7 @@ var require_text_parser = __commonJS({
           return "packet.readLengthCodedNumber()";
         case Types.DECIMAL:
         case Types.NEWDECIMAL:
-          if (config6.decimalNumbers) {
+          if (config4.decimalNumbers) {
             return "packet.parseLengthCodedFloat()";
           }
           return 'packet.readLengthCodedString("ascii")';
@@ -37245,7 +37245,7 @@ var require_text_parser = __commonJS({
         case Types.VECTOR:
           return "packet.parseVector()";
         case Types.JSON:
-          return config6.jsonStrings ? 'packet.readLengthCodedString("utf8")' : 'JSON.parse(packet.readLengthCodedString("utf8"))';
+          return config4.jsonStrings ? 'packet.readLengthCodedString("utf8")' : 'JSON.parse(packet.readLengthCodedString("utf8"))';
         default:
           if (charset === Charsets.BINARY) {
             return "packet.readLengthCodedBuffer()";
@@ -37253,9 +37253,9 @@ var require_text_parser = __commonJS({
           return `packet.readLengthCodedString(${encodingExpr})`;
       }
     }
-    function compile(fields, options, config6) {
-      if (typeof config6.typeCast === "function" && typeof options.typeCast !== "function") {
-        options.typeCast = config6.typeCast;
+    function compile(fields, options, config4) {
+      if (typeof config4.typeCast === "function" && typeof options.typeCast !== "function") {
+        options.typeCast = config4.typeCast;
       }
       function wrap3(field, _this) {
         return {
@@ -37332,7 +37332,7 @@ var require_text_parser = __commonJS({
             fields[i].columnType,
             fields[i].characterSet,
             encodingExpr,
-            config6,
+            config4,
             options
           );
           if (typeof options.typeCast === "function") {
@@ -37347,7 +37347,7 @@ var require_text_parser = __commonJS({
       parserFn("return result;");
       parserFn("}");
       parserFn("};")("})()");
-      if (config6.debug) {
+      if (config4.debug) {
         helpers.printDebugWithCode(
           "Compiled text protocol row parser",
           parserFn.toString()
@@ -37358,8 +37358,8 @@ var require_text_parser = __commonJS({
       }
       return parserFn.toFunction();
     }
-    function getTextParser(fields, options, config6) {
-      return parserCache.getParser("text", fields, options, config6, compile);
+    function getTextParser(fields, options, config4) {
+      return parserCache.getParser("text", fields, options, config4, compile);
     }
     module2.exports = getTextParser;
   }
@@ -37376,15 +37376,15 @@ var require_static_text_parser = __commonJS({
     for (const t in Types) {
       typeNames[Types[t]] = t;
     }
-    function readField({ packet, type, charset, encoding, config: config6, options }) {
+    function readField({ packet, type, charset, encoding, config: config4, options }) {
       const supportBigNumbers = Boolean(
-        options.supportBigNumbers || config6.supportBigNumbers
+        options.supportBigNumbers || config4.supportBigNumbers
       );
       const bigNumberStrings = Boolean(
-        options.bigNumberStrings || config6.bigNumberStrings
+        options.bigNumberStrings || config4.bigNumberStrings
       );
-      const timezone = options.timezone || config6.timezone;
-      const dateStrings = options.dateStrings || config6.dateStrings;
+      const timezone = options.timezone || config4.timezone;
+      const dateStrings = options.dateStrings || config4.dateStrings;
       switch (type) {
         case Types.TINY:
         case Types.SHORT:
@@ -37403,7 +37403,7 @@ var require_static_text_parser = __commonJS({
         case Types.NULL:
         case Types.DECIMAL:
         case Types.NEWDECIMAL:
-          if (config6.decimalNumbers) {
+          if (config4.decimalNumbers) {
             return packet.parseLengthCodedFloat();
           }
           return packet.readLengthCodedString("ascii");
@@ -37425,7 +37425,7 @@ var require_static_text_parser = __commonJS({
         case Types.VECTOR:
           return packet.parseVector();
         case Types.JSON:
-          return config6.jsonStrings ? packet.readLengthCodedString("utf8") : JSON.parse(packet.readLengthCodedString("utf8"));
+          return config4.jsonStrings ? packet.readLengthCodedString("utf8") : JSON.parse(packet.readLengthCodedString("utf8"));
         default:
           if (charset === Charsets.BINARY) {
             return packet.readLengthCodedBuffer();
@@ -37456,19 +37456,19 @@ var require_static_text_parser = __commonJS({
         }
       };
     }
-    function getTextParser(_fields, _options, config6) {
+    function getTextParser(_fields, _options, config4) {
       return {
         next(packet, fields, options) {
           const result = options.rowsAsArray ? [] : {};
           for (let i = 0; i < fields.length; i++) {
             const field = fields[i];
-            const typeCast = options.typeCast ? options.typeCast : config6.typeCast;
+            const typeCast = options.typeCast ? options.typeCast : config4.typeCast;
             const next = () => readField({
               packet,
               type: field.columnType,
               encoding: field.encoding,
               charset: field.characterSet,
-              config: config6,
+              config: config4,
               options
             });
             let value;
@@ -37852,15 +37852,15 @@ var require_binary_parser = __commonJS({
     for (const t in Types) {
       typeNames[Types[t]] = t;
     }
-    function readCodeFor(field, config6, options, fieldNum) {
+    function readCodeFor(field, config4, options, fieldNum) {
       const supportBigNumbers = Boolean(
-        options.supportBigNumbers || config6.supportBigNumbers
+        options.supportBigNumbers || config4.supportBigNumbers
       );
       const bigNumberStrings = Boolean(
-        options.bigNumberStrings || config6.bigNumberStrings
+        options.bigNumberStrings || config4.bigNumberStrings
       );
-      const timezone = options.timezone || config6.timezone;
-      const dateStrings = options.dateStrings || config6.dateStrings;
+      const timezone = options.timezone || config4.timezone;
+      const dateStrings = options.dateStrings || config4.dateStrings;
       const unsigned = field.flags & FieldFlags.UNSIGNED;
       switch (field.columnType) {
         case Types.TINY:
@@ -37890,7 +37890,7 @@ var require_binary_parser = __commonJS({
           return "packet.readTimeString()";
         case Types.DECIMAL:
         case Types.NEWDECIMAL:
-          if (config6.decimalNumbers) {
+          if (config4.decimalNumbers) {
             return "packet.parseLengthCodedFloat();";
           }
           return 'packet.readLengthCodedString("ascii");';
@@ -37899,7 +37899,7 @@ var require_binary_parser = __commonJS({
         case Types.VECTOR:
           return "packet.parseVector()";
         case Types.JSON:
-          return config6.jsonStrings ? 'packet.readLengthCodedString("utf8")' : 'JSON.parse(packet.readLengthCodedString("utf8"));';
+          return config4.jsonStrings ? 'packet.readLengthCodedString("utf8")' : 'JSON.parse(packet.readLengthCodedString("utf8"));';
         case Types.LONGLONG:
           if (!supportBigNumbers) {
             return unsigned ? "packet.readInt64JSNumber();" : "packet.readSInt64JSNumber();";
@@ -37915,7 +37915,7 @@ var require_binary_parser = __commonJS({
           return `packet.readLengthCodedString(fields[${fieldNum}].encoding)`;
       }
     }
-    function compile(fields, options, config6) {
+    function compile(fields, options, config4) {
       const parserFn = genFunc();
       const nullBitmapLength = Math.floor((fields.length + 7 + 2) / 8);
       function wrap3(field, packet) {
@@ -37967,8 +37967,8 @@ var require_binary_parser = __commonJS({
       } else {
         parserFn("const result = {};");
       }
-      if (typeof config6.typeCast === "function" && typeof options.typeCast !== "function") {
-        options.typeCast = config6.typeCast;
+      if (typeof config4.typeCast === "function" && typeof options.typeCast !== "function") {
+        options.typeCast = config4.typeCast;
       }
       parserFn("packet.readInt8();");
       for (let i = 0; i < nullBitmapLength; ++i) {
@@ -38000,7 +38000,7 @@ var require_binary_parser = __commonJS({
         } else {
           const fieldWrapperVar = `fieldWrapper${i}`;
           parserFn(`const ${fieldWrapperVar} = wrap(fields[${i}], packet);`);
-          const readCode = readCodeFor(fields[i], config6, options, i);
+          const readCode = readCodeFor(fields[i], config4, options, i);
           if (typeof options.typeCast === "function") {
             parserFn(
               `${lvalue} = options.typeCast(${fieldWrapperVar}, function() { return ${readCode} });`
@@ -38019,7 +38019,7 @@ var require_binary_parser = __commonJS({
       parserFn("return result;");
       parserFn("}");
       parserFn("};")("})()");
-      if (config6.debug) {
+      if (config4.debug) {
         helpers.printDebugWithCode(
           "Compiled binary protocol row parser",
           parserFn.toString()
@@ -38027,8 +38027,8 @@ var require_binary_parser = __commonJS({
       }
       return parserFn.toFunction({ wrap: wrap3 });
     }
-    function getBinaryParser(fields, options, config6) {
-      return parserCache.getParser("binary", fields, options, config6, compile);
+    function getBinaryParser(fields, options, config4) {
+      return parserCache.getParser("binary", fields, options, config4, compile);
     }
     module2.exports = getBinaryParser;
   }
@@ -38046,16 +38046,16 @@ var require_static_binary_parser = __commonJS({
     for (const t in Types) {
       typeNames[Types[t]] = t;
     }
-    function getBinaryParser(fields, _options, config6) {
-      function readCode(field, config7, options, fieldNum, packet) {
+    function getBinaryParser(fields, _options, config4) {
+      function readCode(field, config5, options, fieldNum, packet) {
         const supportBigNumbers = Boolean(
-          options.supportBigNumbers || config7.supportBigNumbers
+          options.supportBigNumbers || config5.supportBigNumbers
         );
         const bigNumberStrings = Boolean(
-          options.bigNumberStrings || config7.bigNumberStrings
+          options.bigNumberStrings || config5.bigNumberStrings
         );
-        const timezone = options.timezone || config7.timezone;
-        const dateStrings = options.dateStrings || config7.dateStrings;
+        const timezone = options.timezone || config5.timezone;
+        const dateStrings = options.dateStrings || config5.dateStrings;
         const unsigned = field.flags & FieldFlags.UNSIGNED;
         switch (field.columnType) {
           case Types.TINY:
@@ -38086,13 +38086,13 @@ var require_static_binary_parser = __commonJS({
             return packet.readTimeString();
           case Types.DECIMAL:
           case Types.NEWDECIMAL:
-            return config7.decimalNumbers ? packet.parseLengthCodedFloat() : packet.readLengthCodedString("ascii");
+            return config5.decimalNumbers ? packet.parseLengthCodedFloat() : packet.readLengthCodedString("ascii");
           case Types.GEOMETRY:
             return packet.parseGeometryValue();
           case Types.VECTOR:
             return packet.parseVector();
           case Types.JSON:
-            return config7.jsonStrings ? packet.readLengthCodedString("utf8") : JSON.parse(packet.readLengthCodedString("utf8"));
+            return config5.jsonStrings ? packet.readLengthCodedString("utf8") : JSON.parse(packet.readLengthCodedString("utf8"));
           case Types.LONGLONG:
             if (!supportBigNumbers)
               return unsigned ? packet.readInt64JSNumber() : packet.readSInt64JSNumber();
@@ -38116,14 +38116,14 @@ var require_static_binary_parser = __commonJS({
           let nullByteIndex = 0;
           for (let i = 0; i < fields2.length; i++) {
             const field = fields2[i];
-            const typeCast = options.typeCast !== void 0 ? options.typeCast : config6.typeCast;
+            const typeCast = options.typeCast !== void 0 ? options.typeCast : config4.typeCast;
             let value;
             if (nullBitmaskBytes[nullByteIndex] & currentFieldNullBit) {
               value = null;
             } else if (options.typeCast === false) {
               value = packet.readLengthCodedBuffer();
             } else {
-              const next = () => readCode(field, config6, options, i, packet);
+              const next = () => readCode(field, config4, options, i, packet);
               value = typeof typeCast === "function" ? typeCast(
                 {
                   type: typeNames[field.columnType],
@@ -39357,13 +39357,13 @@ var require_tracing = __commonJS({
     var executeChannel = hasTracingChannel ? dc.tracingChannel("mysql2:execute") : void 0;
     var connectChannel = hasTracingChannel ? dc.tracingChannel("mysql2:connect") : void 0;
     var poolConnectChannel = hasTracingChannel ? dc.tracingChannel("mysql2:pool:connect") : void 0;
-    function getServerContext(config6) {
-      if (config6.socketPath) {
-        return { serverAddress: config6.socketPath, serverPort: void 0 };
+    function getServerContext(config4) {
+      if (config4.socketPath) {
+        return { serverAddress: config4.socketPath, serverPort: void 0 };
       }
       return {
-        serverAddress: config6.host || "localhost",
-        serverPort: config6.port || 3306
+        serverAddress: config4.host || "localhost",
+        serverPort: config4.port || 3306
       };
     }
     function shouldTrace(channel) {
@@ -39459,20 +39459,20 @@ var require_named_placeholders = __commonJS({
       }
       return [query];
     }
-    function createCompiler(config6) {
-      if (!config6) config6 = {};
-      if (!config6.placeholder) {
-        config6.placeholder = "?";
+    function createCompiler(config4) {
+      if (!config4) config4 = {};
+      if (!config4.placeholder) {
+        config4.placeholder = "?";
       }
       let ncache = 100;
       let cache2;
-      if (typeof config6.cache === "number") {
-        ncache = config6.cache;
+      if (typeof config4.cache === "number") {
+        ncache = config4.cache;
       }
-      if (typeof config6.cache === "object") {
-        cache2 = config6.cache;
+      if (typeof config4.cache === "object") {
+        cache2 = config4.cache;
       }
-      if (config6.cache !== false && !cache2) {
+      if (config4.cache !== false && !cache2) {
         cache2 = require_lib4().createLRU({ max: ncache });
       }
       function toArrayParams(tree, params) {
@@ -39503,17 +39503,17 @@ var require_named_placeholders = __commonJS({
         let unnamed = noTailingSemicolon(tree[0][0]);
         for (let i = 1; i < tree[0].length; ++i) {
           if (tree[0][i - 1].slice(-1) === ":") {
-            unnamed += config6.placeholder;
+            unnamed += config4.placeholder;
           }
-          unnamed += config6.placeholder;
+          unnamed += config4.placeholder;
           unnamed += noTailingSemicolon(tree[0][i]);
         }
         const last = tree[0][tree[0].length - 1];
         if (tree[0].length === tree[1].length) {
           if (last.slice(-1) === ":") {
-            unnamed += config6.placeholder;
+            unnamed += config4.placeholder;
           }
-          unnamed += config6.placeholder;
+          unnamed += config4.placeholder;
         }
         return [unnamed, tree[1]];
       }
@@ -39676,7 +39676,7 @@ var require_connection = __commonJS({
           });
           this.addCommand(handshakeCommand);
           if (shouldTrace(connectChannel)) {
-            const config6 = this.config;
+            const config4 = this.config;
             tracePromise(
               connectChannel,
               () => new Promise((resolve, reject) => {
@@ -39693,12 +39693,12 @@ var require_connection = __commonJS({
                 this.once("error", onError);
               }),
               () => {
-                const server = getServerContext(config6);
+                const server = getServerContext(config4);
                 return {
-                  database: config6.database || "",
+                  database: config4.database || "",
                   serverAddress: server.serverAddress,
                   serverPort: server.serverPort,
-                  user: config6.user || ""
+                  user: config4.user || ""
                 };
               }
             ).catch(() => {
@@ -40466,10 +40466,10 @@ var require_connection = __commonJS({
         this.addCommand = this._addCommandClosedState;
         return quitCmd;
       }
-      static createQuery(sql, values, cb, config6) {
+      static createQuery(sql, values, cb, config4) {
         let options = {
-          rowsAsArray: config6.rowsAsArray,
-          infileStreamFactory: config6.infileStreamFactory
+          rowsAsArray: config4.rowsAsArray,
+          infileStreamFactory: config4.infileStreamFactory
         };
         if (typeof sql === "object") {
           options = {
@@ -40985,15 +40985,15 @@ var require_pool = __commonJS({
           this.emit("enqueue");
           return this._connectionQueue.push(cb2);
         };
-        const config6 = this.config.connectionConfig;
+        const config4 = this.config.connectionConfig;
         traceCallback(
           poolConnectChannel,
           _getConnection,
           0,
           () => {
-            const server = getServerContext(config6);
+            const server = getServerContext(config4);
             return {
-              database: config6.database || "",
+              database: config4.database || "",
               serverAddress: server.serverAddress,
               serverPort: server.serverPort
             };
@@ -41450,13 +41450,13 @@ var require_pool_cluster = __commonJS({
       }
     };
     var PoolCluster = class extends EventEmitter2 {
-      constructor(config6) {
+      constructor(config4) {
         super();
-        config6 = config6 || {};
-        this._canRetry = typeof config6.canRetry === "undefined" ? true : config6.canRetry;
-        this._removeNodeErrorCount = config6.removeNodeErrorCount || 5;
-        this._restoreNodeTimeout = config6.restoreNodeTimeout || 0;
-        this._defaultSelector = config6.defaultSelector || "RR";
+        config4 = config4 || {};
+        this._canRetry = typeof config4.canRetry === "undefined" ? true : config4.canRetry;
+        this._removeNodeErrorCount = config4.removeNodeErrorCount || 5;
+        this._restoreNodeTimeout = config4.restoreNodeTimeout || 0;
+        this._defaultSelector = config4.defaultSelector || "RR";
         this._closed = false;
         this._lastId = 0;
         this._nodes = {};
@@ -41477,16 +41477,16 @@ var require_pool_cluster = __commonJS({
         }
         return this._namespaces[key];
       }
-      add(id, config6) {
+      add(id, config4) {
         if (typeof id === "object") {
-          config6 = id;
+          config4 = id;
           id = `CLUSTER::${++this._lastId}`;
         }
         if (typeof this._nodes[id] === "undefined") {
           this._nodes[id] = {
             id,
             errorCount: 0,
-            pool: new Pool({ config: new PoolConfig(config6) }),
+            pool: new Pool({ config: new PoolConfig(config4) }),
             _offlineUntil: 0
           };
           this._serviceableNodeIds.push(id);
@@ -41649,8 +41649,8 @@ var require_create_pool = __commonJS({
     "use strict";
     var Pool = require_pool3();
     var PoolConfig = require_pool_config();
-    function createPool(config6) {
-      return new Pool({ config: new PoolConfig(config6) });
+    function createPool(config4) {
+      return new Pool({ config: new PoolConfig(config4) });
     }
     module2.exports = createPool;
   }
@@ -41661,8 +41661,8 @@ var require_create_pool_cluster = __commonJS({
   "node_modules/mysql2/lib/create_pool_cluster.js"(exports2, module2) {
     "use strict";
     var PoolCluster = require_pool_cluster();
-    function createPoolCluster(config6) {
-      return new PoolCluster(config6);
+    function createPoolCluster(config4) {
+      return new PoolCluster(config4);
     }
     module2.exports = createPoolCluster;
   }
@@ -42204,8 +42204,8 @@ var require_cookie2 = __commonJS({
 var require_session = __commonJS({
   "node_modules/express-session/session/session.js"(exports2, module2) {
     "use strict";
-    module2.exports = Session;
-    function Session(req, data) {
+    module2.exports = Session2;
+    function Session2(req, data) {
       Object.defineProperty(this, "req", { value: req });
       Object.defineProperty(this, "id", { value: req.sessionID });
       if (typeof data === "object" && data !== null) {
@@ -42216,19 +42216,19 @@ var require_session = __commonJS({
         }
       }
     }
-    defineMethod(Session.prototype, "touch", function touch() {
+    defineMethod(Session2.prototype, "touch", function touch() {
       return this.resetMaxAge();
     });
-    defineMethod(Session.prototype, "resetMaxAge", function resetMaxAge() {
+    defineMethod(Session2.prototype, "resetMaxAge", function resetMaxAge() {
       this.cookie.maxAge = this.cookie.originalMaxAge;
       return this;
     });
-    defineMethod(Session.prototype, "save", function save9(fn) {
+    defineMethod(Session2.prototype, "save", function save9(fn) {
       this.req.sessionStore.set(this.id, this, fn || function() {
       });
       return this;
     });
-    defineMethod(Session.prototype, "reload", function reload(fn) {
+    defineMethod(Session2.prototype, "reload", function reload(fn) {
       var req = this.req;
       var store = this.req.sessionStore;
       store.get(this.id, function(err, sess) {
@@ -42239,12 +42239,12 @@ var require_session = __commonJS({
       });
       return this;
     });
-    defineMethod(Session.prototype, "destroy", function destroy(fn) {
+    defineMethod(Session2.prototype, "destroy", function destroy(fn) {
       delete this.req.session;
       this.req.sessionStore.destroy(this.id, fn);
       return this;
     });
-    defineMethod(Session.prototype, "regenerate", function regenerate(fn) {
+    defineMethod(Session2.prototype, "regenerate", function regenerate(fn) {
       this.req.sessionStore.regenerate(this.req, fn);
       return this;
     });
@@ -42265,7 +42265,7 @@ var require_store = __commonJS({
     "use strict";
     var Cookie = require_cookie2();
     var EventEmitter2 = require("events").EventEmitter;
-    var Session = require_session();
+    var Session2 = require_session();
     var util4 = require("util");
     module2.exports = Store;
     function Store() {
@@ -42296,7 +42296,7 @@ var require_store = __commonJS({
         sess.cookie.expires = new Date(expires);
       }
       sess.cookie.originalMaxAge = originalMaxAge;
-      req.session = new Session(req, sess);
+      req.session = new Session2(req, sess);
       return req.session;
     };
   }
@@ -42322,7 +42322,7 @@ var require_memory = __commonJS({
       var sessions = /* @__PURE__ */ Object.create(null);
       for (var i = 0; i < sessionIds.length; i++) {
         var sessionId = sessionIds[i];
-        var session2 = getSession.call(this, sessionId);
+        var session2 = getSession2.call(this, sessionId);
         if (session2) {
           sessions[sessionId] = session2;
         }
@@ -42338,7 +42338,7 @@ var require_memory = __commonJS({
       callback && defer(callback);
     };
     MemoryStore2.prototype.get = function get(sessionId, callback) {
-      defer(callback, null, getSession.call(this, sessionId));
+      defer(callback, null, getSession2.call(this, sessionId));
     };
     MemoryStore2.prototype.set = function set2(sessionId, session2, callback) {
       this.sessions[sessionId] = JSON.stringify(session2);
@@ -42351,14 +42351,14 @@ var require_memory = __commonJS({
       });
     };
     MemoryStore2.prototype.touch = function touch(sessionId, session2, callback) {
-      var currentSession = getSession.call(this, sessionId);
+      var currentSession = getSession2.call(this, sessionId);
       if (currentSession) {
         currentSession.cookie = session2.cookie;
         this.sessions[sessionId] = JSON.stringify(currentSession);
       }
       callback && defer(callback);
     };
-    function getSession(sessionId) {
+    function getSession2(sessionId) {
       var sess = this.sessions[sessionId];
       if (!sess) {
         return;
@@ -42391,13 +42391,13 @@ var require_express_session = __commonJS({
     var uid = require_uid_safe().sync;
     var Cookie = require_cookie2();
     var MemoryStore2 = require_memory();
-    var Session = require_session();
+    var Session2 = require_session();
     var Store = require_store();
     var env = process.env.NODE_ENV;
     exports2 = module2.exports = session2;
     exports2.Store = Store;
     exports2.Cookie = Cookie;
-    exports2.Session = Session;
+    exports2.Session = Session2;
     exports2.MemoryStore = MemoryStore2;
     var warning = "Warning: connect.session() MemoryStore is not\ndesigned for a production environment, as it will leak\nmemory, and will not scale past a single process.";
     var defer = typeof setImmediate === "function" ? setImmediate : function(fn) {
@@ -42443,7 +42443,7 @@ var require_express_session = __commonJS({
       }
       store.generate = function(req) {
         req.sessionID = generateId(req);
-        req.session = new Session(req);
+        req.session = new Session2(req);
         req.session.cookie = new Cookie(typeof cookieOptions === "function" ? cookieOptions(req) : cookieOptions);
         var isSecure = issecure(req, trustProxy);
         if (cookieOptions.secure === "auto") {
@@ -46607,8 +46607,8 @@ var init_tool = __esm({
 function _isToolCall(toolCall) {
   return !!(toolCall && typeof toolCall === "object" && "type" in toolCall && toolCall.type === "tool_call");
 }
-function _configHasToolCallId(config6) {
-  return !!(config6 && typeof config6 === "object" && "toolCall" in config6 && config6.toolCall != null && typeof config6.toolCall === "object" && "id" in config6.toolCall && typeof config6.toolCall.id === "string");
+function _configHasToolCallId(config4) {
+  return !!(config4 && typeof config4 === "object" && "toolCall" in config4 && config4.toolCall != null && typeof config4.toolCall === "object" && "id" in config4.toolCall && typeof config4.toolCall.id === "string");
 }
 var ToolInputParsingException;
 var init_utils2 = __esm({
@@ -48797,7 +48797,7 @@ var init_prompt_cache = __esm({
   "node_modules/langsmith/dist/utils/prompt_cache/index.js"() {
     init_fs();
     PromptCache = class {
-      constructor(config6 = {}) {
+      constructor(config4 = {}) {
         Object.defineProperty(this, "cache", {
           enumerable: true,
           configurable: true,
@@ -48839,7 +48839,7 @@ var init_prompt_cache = __esm({
             refreshErrors: 0
           }
         });
-        this.configure(config6);
+        this.configure(config4);
       }
       /**
        * Get cache performance metrics.
@@ -49053,11 +49053,11 @@ var init_prompt_cache = __esm({
           }
         }
       }
-      configure(config6) {
+      configure(config4) {
         this.stop();
-        this.refreshIntervalSeconds = config6.refreshIntervalSeconds ?? 60;
-        this.maxSize = config6.maxSize ?? 100;
-        this.ttlSeconds = config6.ttlSeconds ?? 5 * 60;
+        this.refreshIntervalSeconds = config4.refreshIntervalSeconds ?? 60;
+        this.maxSize = config4.maxSize ?? 100;
+        this.ttlSeconds = config4.ttlSeconds ?? 5 * 60;
       }
     };
     promptCacheSingleton = new PromptCache();
@@ -53042,7 +53042,7 @@ var init_client = __esm({
       get _fetch() {
         return this.fetchImplementation || _getFetchImplementation(this.debug);
       }
-      constructor(config6 = {}) {
+      constructor(config4 = {}) {
         Object.defineProperty(this, "apiKey", {
           enumerable: true,
           configurable: true,
@@ -53260,29 +53260,29 @@ var init_client = __esm({
           value: getEnvironmentVariable2("LANGSMITH_DEBUG") === "true"
         });
         const defaultConfig = _Client.getDefaultClientConfig();
-        this.tracingSampleRate = getTracingSamplingRate(config6.tracingSamplingRate);
-        this.apiUrl = trimQuotes(config6.apiUrl ?? defaultConfig.apiUrl) ?? "";
+        this.tracingSampleRate = getTracingSamplingRate(config4.tracingSamplingRate);
+        this.apiUrl = trimQuotes(config4.apiUrl ?? defaultConfig.apiUrl) ?? "";
         if (this.apiUrl.endsWith("/")) {
           this.apiUrl = this.apiUrl.slice(0, -1);
         }
-        this.apiKey = trimQuotes(config6.apiKey ?? defaultConfig.apiKey);
-        this.webUrl = trimQuotes(config6.webUrl ?? defaultConfig.webUrl);
+        this.apiKey = trimQuotes(config4.apiKey ?? defaultConfig.apiKey);
+        this.webUrl = trimQuotes(config4.webUrl ?? defaultConfig.webUrl);
         if (this.webUrl?.endsWith("/")) {
           this.webUrl = this.webUrl.slice(0, -1);
         }
-        this.workspaceId = trimQuotes(config6.workspaceId ?? getLangSmithEnvironmentVariable("WORKSPACE_ID"));
-        this.timeout_ms = config6.timeout_ms ?? 9e4;
+        this.workspaceId = trimQuotes(config4.workspaceId ?? getLangSmithEnvironmentVariable("WORKSPACE_ID"));
+        this.timeout_ms = config4.timeout_ms ?? 9e4;
         this.caller = new AsyncCaller({
-          ...config6.callerOptions ?? {},
+          ...config4.callerOptions ?? {},
           maxRetries: 4,
-          debug: config6.debug ?? this.debug
+          debug: config4.debug ?? this.debug
         });
-        this.traceBatchConcurrency = config6.traceBatchConcurrency ?? this.traceBatchConcurrency;
+        this.traceBatchConcurrency = config4.traceBatchConcurrency ?? this.traceBatchConcurrency;
         if (this.traceBatchConcurrency < 1) {
           throw new Error("Trace batch concurrency must be positive.");
         }
-        this.debug = config6.debug ?? this.debug;
-        this.fetchImplementation = config6.fetchImplementation;
+        this.debug = config4.debug ?? this.debug;
+        this.fetchImplementation = config4.fetchImplementation;
         this.failedTracesDir = getLangSmithEnvironmentVariable("FAILED_TRACES_DIR") || void 0;
         const failedTracesMb = getLangSmithEnvironmentVariable("FAILED_TRACES_MAX_MB");
         if (failedTracesMb) {
@@ -53291,42 +53291,42 @@ var init_client = __esm({
             this.failedTracesMaxBytes = n3 * 1024 * 1024;
           }
         }
-        const maxMemory = config6.maxIngestMemoryBytes ?? DEFAULT_MAX_SIZE_BYTES;
+        const maxMemory = config4.maxIngestMemoryBytes ?? DEFAULT_MAX_SIZE_BYTES;
         this.batchIngestCaller = new AsyncCaller({
           maxRetries: 4,
           maxConcurrency: this.traceBatchConcurrency,
           maxQueueSizeBytes: maxMemory,
-          ...config6.callerOptions ?? {},
+          ...config4.callerOptions ?? {},
           onFailedResponseHook: handle429,
-          debug: config6.debug ?? this.debug
+          debug: config4.debug ?? this.debug
         });
-        this.hideInputs = config6.hideInputs ?? config6.anonymizer ?? defaultConfig.hideInputs;
-        this.hideOutputs = config6.hideOutputs ?? config6.anonymizer ?? defaultConfig.hideOutputs;
-        this.omitTracedRuntimeInfo = config6.omitTracedRuntimeInfo ?? false;
-        this.autoBatchTracing = config6.autoBatchTracing ?? this.autoBatchTracing;
+        this.hideInputs = config4.hideInputs ?? config4.anonymizer ?? defaultConfig.hideInputs;
+        this.hideOutputs = config4.hideOutputs ?? config4.anonymizer ?? defaultConfig.hideOutputs;
+        this.omitTracedRuntimeInfo = config4.omitTracedRuntimeInfo ?? false;
+        this.autoBatchTracing = config4.autoBatchTracing ?? this.autoBatchTracing;
         this.autoBatchQueue = new AutoBatchQueue(maxMemory);
-        this.blockOnRootRunFinalization = config6.blockOnRootRunFinalization ?? this.blockOnRootRunFinalization;
-        this.batchSizeBytesLimit = config6.batchSizeBytesLimit;
-        this.batchSizeLimit = config6.batchSizeLimit;
-        this.fetchOptions = config6.fetchOptions || {};
-        this.manualFlushMode = config6.manualFlushMode ?? this.manualFlushMode;
+        this.blockOnRootRunFinalization = config4.blockOnRootRunFinalization ?? this.blockOnRootRunFinalization;
+        this.batchSizeBytesLimit = config4.batchSizeBytesLimit;
+        this.batchSizeLimit = config4.batchSizeLimit;
+        this.fetchOptions = config4.fetchOptions || {};
+        this.manualFlushMode = config4.manualFlushMode ?? this.manualFlushMode;
         if (getOtelEnabled()) {
           this.langSmithToOTELTranslator = new LangSmithToOTELTranslator();
         }
         this.cachedLSEnvVarsForMetadata = getLangSmithEnvVarsMetadata();
-        if (config6.cache !== void 0 && config6.disablePromptCache) {
+        if (config4.cache !== void 0 && config4.disablePromptCache) {
           warnOnce("Both 'cache' and 'disablePromptCache' were provided. The 'cache' parameter is deprecated and will be removed in a future version. Using 'cache' parameter value.");
         }
-        if (config6.cache !== void 0) {
+        if (config4.cache !== void 0) {
           warnOnce("The 'cache' parameter is deprecated and will be removed in a future version. Use 'configureGlobalPromptCache()' to configure the global cache, or 'disablePromptCache: true' to disable caching for this client.");
-          if (config6.cache === false) {
+          if (config4.cache === false) {
             this._promptCache = void 0;
-          } else if (config6.cache === true) {
+          } else if (config4.cache === true) {
             this._promptCache = promptCacheSingleton;
           } else {
-            this._promptCache = config6.cache;
+            this._promptCache = config4.cache;
           }
-        } else if (!config6.disablePromptCache) {
+        } else if (!config4.disablePromptCache) {
           this._promptCache = promptCacheSingleton;
         }
       }
@@ -57526,17 +57526,17 @@ var init_run_trees = __esm({
           return;
         }
         const defaultConfig = _RunTree.getDefaultConfig();
-        const { metadata, ...config6 } = originalConfig;
-        const client2 = config6.client ?? _RunTree.getSharedClient();
+        const { metadata, ...config4 } = originalConfig;
+        const client2 = config4.client ?? _RunTree.getSharedClient();
         const dedupedMetadata = {
           ...metadata,
-          ...config6?.extra?.metadata
+          ...config4?.extra?.metadata
         };
-        config6.extra = { ...config6.extra, metadata: dedupedMetadata };
-        if ("id" in config6 && config6.id == null) {
-          delete config6.id;
+        config4.extra = { ...config4.extra, metadata: dedupedMetadata };
+        if ("id" in config4 && config4.id == null) {
+          delete config4.id;
         }
-        Object.assign(this, { ...defaultConfig, ...config6, client: client2 });
+        Object.assign(this, { ...defaultConfig, ...config4, client: client2 });
         this.execution_order ??= 1;
         this.child_execution_order ??= 1;
         if (!this.dotted_order) {
@@ -57595,15 +57595,15 @@ var init_run_trees = __esm({
         }
         return _RunTree.sharedClient;
       }
-      createChild(config6) {
+      createChild(config4) {
         const child_execution_order = this.child_execution_order + 1;
         const inheritedReplicas = this.replicas?.map((replica) => {
           const { reroot, ...rest } = replica;
           return rest;
         });
-        const childReplicas = config6.replicas ?? inheritedReplicas;
+        const childReplicas = config4.replicas ?? inheritedReplicas;
         const child = new _RunTree({
-          ...config6,
+          ...config4,
           parent_run: this,
           project_name: this.project_name,
           replicas: childReplicas,
@@ -57624,7 +57624,7 @@ var init_run_trees = __esm({
           child[_LC_CONTEXT_VARIABLES_KEY] = this[_LC_CONTEXT_VARIABLES_KEY];
         }
         const LC_CHILD = /* @__PURE__ */ Symbol.for("lc:child_config");
-        const presentConfig = config6.extra?.[LC_CHILD] ?? this.extra[LC_CHILD];
+        const presentConfig = config4.extra?.[LC_CHILD] ?? this.extra[LC_CHILD];
         if (isRunnableConfigLike(presentConfig)) {
           const newConfig = { ...presentConfig };
           const callbacks = isCallbackManagerLike(newConfig.callbacks) ? newConfig.callbacks.copy?.() : void 0;
@@ -58011,7 +58011,7 @@ var init_run_trees = __esm({
           return { strTime, time: Date.parse(strTime + "Z"), uuid: uuid3 };
         });
         const traceId = parsedDottedOrder[0].uuid;
-        const config6 = {
+        const config4 = {
           ...inheritArgs,
           name: inheritArgs?.["name"] ?? "parent",
           run_type: inheritArgs?.["run_type"] ?? "chain",
@@ -58022,12 +58022,12 @@ var init_run_trees = __esm({
         };
         if (rawHeaders["baggage"] && typeof rawHeaders["baggage"] === "string") {
           const baggage = Baggage.fromHeader(rawHeaders["baggage"]);
-          config6.metadata = baggage.metadata;
-          config6.tags = baggage.tags;
-          config6.project_name = baggage.project_name;
-          config6.replicas = baggage.replicas;
+          config4.metadata = baggage.metadata;
+          config4.tags = baggage.tags;
+          config4.project_name = baggage.project_name;
+          config4.replicas = baggage.replicas;
         }
-        const runTree = new _RunTree(config6);
+        const runTree = new _RunTree(config4);
         runTree.distributedParentId = runTree.id;
         return runTree;
       }
@@ -59625,8 +59625,8 @@ var init_async_local_storage = __esm({
       getRunnableConfig() {
         return this.getInstance().getStore()?.extra?.[LC_CHILD_KEY];
       }
-      runWithConfig(config6, callback, avoidCreatingRootRunTree) {
-        const callbackManager = CallbackManager._configureSync(config6?.callbacks, void 0, config6?.tags, void 0, config6?.metadata);
+      runWithConfig(config4, callback, avoidCreatingRootRunTree) {
+        const callbackManager = CallbackManager._configureSync(config4?.callbacks, void 0, config4?.tags, void 0, config4?.metadata);
         const storage = this.getInstance();
         const previousValue = storage.getStore();
         const parentRunId = callbackManager?.getParentRunId();
@@ -59639,7 +59639,7 @@ var init_async_local_storage = __esm({
         });
         if (runTree) runTree.extra = {
           ...runTree.extra,
-          [LC_CHILD_KEY]: config6
+          [LC_CHILD_KEY]: config4
         };
         if (previousValue !== void 0 && previousValue[_CONTEXT_VARIABLES_KEY] !== void 0) {
           if (runTree === void 0) runTree = {};
@@ -59671,8 +59671,8 @@ var init_singletons = __esm({
 });
 
 // node_modules/@langchain/core/dist/runnables/config.js
-async function getCallbackManagerForConfig(config6) {
-  return CallbackManager._configureSync(config6?.callbacks, void 0, config6?.tags, void 0, config6?.metadata);
+async function getCallbackManagerForConfig(config4) {
+  return CallbackManager._configureSync(config4?.callbacks, void 0, config4?.tags, void 0, config4?.metadata);
 }
 function mergeConfigs(...configs) {
   const copy = {};
@@ -59725,7 +59725,7 @@ function mergeConfigs(...configs) {
   }
   return copy;
 }
-function ensureConfig(config6) {
+function ensureConfig(config4) {
   const implicitConfig = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
   let empty = {
     tags: [],
@@ -59740,7 +59740,7 @@ function ensureConfig(config6) {
       return currentConfig;
     }, empty);
   }
-  if (config6) empty = Object.entries(config6).reduce((currentConfig, [key, value]) => {
+  if (config4) empty = Object.entries(config4).reduce((currentConfig, [key, value]) => {
     if (value !== void 0) currentConfig[key] = value;
     return currentConfig;
   }, empty);
@@ -59763,8 +59763,8 @@ function ensureConfig(config6) {
   }
   return empty;
 }
-function patchConfig(config6 = {}, { callbacks, maxConcurrency, recursionLimit, runName, configurable, runId } = {}) {
-  const newConfig = ensureConfig(config6);
+function patchConfig(config4 = {}, { callbacks, maxConcurrency, recursionLimit, runName, configurable, runId } = {}) {
+  const newConfig = ensureConfig(config4);
   if (callbacks !== void 0) {
     delete newConfig.runName;
     newConfig.callbacks = callbacks;
@@ -59779,18 +59779,18 @@ function patchConfig(config6 = {}, { callbacks, maxConcurrency, recursionLimit, 
   if (runId !== void 0) delete newConfig.runId;
   return newConfig;
 }
-function pickRunnableConfigKeys(config6) {
-  if (!config6) return void 0;
+function pickRunnableConfigKeys(config4) {
+  if (!config4) return void 0;
   return {
-    configurable: config6.configurable,
-    recursionLimit: config6.recursionLimit,
-    callbacks: config6.callbacks,
-    tags: config6.tags,
-    metadata: config6.metadata,
-    maxConcurrency: config6.maxConcurrency,
-    timeout: config6.timeout,
-    signal: config6.signal,
-    store: config6.store
+    configurable: config4.configurable,
+    recursionLimit: config4.recursionLimit,
+    callbacks: config4.callbacks,
+    tags: config4.tags,
+    metadata: config4.metadata,
+    maxConcurrency: config4.maxConcurrency,
+    timeout: config4.timeout,
+    signal: config4.signal,
+    store: config4.store
   };
 }
 var PRIMITIVES;
@@ -60065,7 +60065,7 @@ var init_outputs = __esm({
 // node_modules/zod/v4/core/core.js
 // @__NO_SIDE_EFFECTS__
 function $constructor(name, initializer3, params) {
-  function init(inst, def) {
+  function init4(inst, def) {
     if (!inst._zod) {
       Object.defineProperty(inst, "_zod", {
         value: {
@@ -60097,14 +60097,14 @@ function $constructor(name, initializer3, params) {
   function _(def) {
     var _a4;
     const inst = params?.Parent ? new Definition() : this;
-    init(inst, def);
+    init4(inst, def);
     (_a4 = inst._zod).deferred ?? (_a4.deferred = []);
     for (const fn of inst._zod.deferred) {
       fn();
     }
     return inst;
   }
-  Object.defineProperty(_, "init", { value: init });
+  Object.defineProperty(_, "init", { value: init4 });
   Object.defineProperty(_, Symbol.hasInstance, {
     value: (inst) => {
       if (params?.Parent && inst instanceof params.Parent)
@@ -60115,7 +60115,7 @@ function $constructor(name, initializer3, params) {
   Object.defineProperty(_, "name", { value: name });
   return _;
 }
-function config4(newConfig) {
+function config2(newConfig) {
   if (newConfig)
     Object.assign(globalConfig, newConfig);
   return globalConfig;
@@ -60640,10 +60640,10 @@ function prefixIssues(path3, issues) {
 function unwrapMessage(message) {
   return typeof message === "string" ? message : message?.message;
 }
-function finalizeIssue(iss, ctx, config6) {
+function finalizeIssue(iss, ctx, config4) {
   const full = { ...iss, path: iss.path ?? [] };
   if (!iss.message) {
-    const message = unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config6.customError?.(iss)) ?? unwrapMessage(config6.localeError?.(iss)) ?? "Invalid input";
+    const message = unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config4.customError?.(iss)) ?? unwrapMessage(config4.localeError?.(iss)) ?? "Invalid input";
     full.message = message;
   }
   delete full.inst;
@@ -60983,7 +60983,7 @@ var init_parse3 = __esm({
         throw new $ZodAsyncError();
       }
       if (result.issues.length) {
-        const e = new (_params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config4())));
+        const e = new (_params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config2())));
         captureStackTrace(e, _params?.callee);
         throw e;
       }
@@ -60996,7 +60996,7 @@ var init_parse3 = __esm({
       if (result instanceof Promise)
         result = await result;
       if (result.issues.length) {
-        const e = new (params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config4())));
+        const e = new (params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config2())));
         captureStackTrace(e, params?.callee);
         throw e;
       }
@@ -61011,7 +61011,7 @@ var init_parse3 = __esm({
       }
       return result.issues.length ? {
         success: false,
-        error: new (_Err ?? $ZodError)(result.issues.map((iss) => finalizeIssue(iss, ctx, config4())))
+        error: new (_Err ?? $ZodError)(result.issues.map((iss) => finalizeIssue(iss, ctx, config2())))
       } : { success: true, data: result.value };
     };
     safeParse = /* @__PURE__ */ _safeParse($ZodRealError);
@@ -61022,7 +61022,7 @@ var init_parse3 = __esm({
         result = await result;
       return result.issues.length ? {
         success: false,
-        error: new _Err(result.issues.map((iss) => finalizeIssue(iss, ctx, config4())))
+        error: new _Err(result.issues.map((iss) => finalizeIssue(iss, ctx, config2())))
       } : { success: true, data: result.value };
     };
     safeParseAsync = /* @__PURE__ */ _safeParseAsync($ZodRealError);
@@ -61964,7 +61964,7 @@ function handleUnionResults(results, final2, inst, ctx) {
     code: "invalid_union",
     input: final2.value,
     inst,
-    errors: results.map((result) => result.issues.map((iss) => finalizeIssue(iss, ctx, config4())))
+    errors: results.map((result) => result.issues.map((iss) => finalizeIssue(iss, ctx, config2())))
   });
   return final2;
 }
@@ -61979,7 +61979,7 @@ function handleExclusiveUnionResults(results, final2, inst, ctx) {
       code: "invalid_union",
       input: final2.value,
       inst,
-      errors: results.map((result) => result.issues.map((iss) => finalizeIssue(iss, ctx, config4())))
+      errors: results.map((result) => result.issues.map((iss) => finalizeIssue(iss, ctx, config2())))
     });
   } else {
     final2.issues.push({
@@ -62091,7 +62091,7 @@ function handleMapResult(keyResult, valueResult, final2, key, input, inst, ctx) 
         origin: "map",
         input,
         inst,
-        issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config4()))
+        issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config2()))
       });
     }
   }
@@ -62105,7 +62105,7 @@ function handleMapResult(keyResult, valueResult, final2, key, input, inst, ctx) 
         input,
         inst,
         key,
-        issues: valueResult.issues.map((iss) => finalizeIssue(iss, ctx, config4()))
+        issues: valueResult.issues.map((iss) => finalizeIssue(iss, ctx, config2()))
       });
     }
   }
@@ -63267,7 +63267,7 @@ var init_schemas = __esm({
                 payload.issues.push({
                   code: "invalid_key",
                   origin: "record",
-                  issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config4())),
+                  issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config2())),
                   input: key,
                   path: [key],
                   inst
@@ -63563,7 +63563,7 @@ var init_schemas = __esm({
               payload.value = def.catchValue({
                 ...payload,
                 error: {
-                  issues: result2.issues.map((iss) => finalizeIssue(iss, ctx, config4()))
+                  issues: result2.issues.map((iss) => finalizeIssue(iss, ctx, config2()))
                 },
                 input: payload.value
               });
@@ -63577,7 +63577,7 @@ var init_schemas = __esm({
           payload.value = def.catchValue({
             ...payload,
             error: {
-              issues: result.issues.map((iss) => finalizeIssue(iss, ctx, config4()))
+              issues: result.issues.map((iss) => finalizeIssue(iss, ctx, config2()))
             },
             input: payload.value
           });
@@ -72089,7 +72089,7 @@ __export(core_exports2, {
   _xid: () => _xid,
   _xor: () => _xor,
   clone: () => clone,
-  config: () => config4,
+  config: () => config2,
   createStandardJSONSchemaMethod: () => createStandardJSONSchemaMethod,
   createToJSONSchemaMethod: () => createToJSONSchemaMethod,
   decode: () => decode,
@@ -80495,9 +80495,9 @@ var init_root_listener = __esm({
       argOnStart;
       argOnEnd;
       argOnError;
-      constructor({ config: config6, onStart, onEnd, onError }) {
+      constructor({ config: config4, onStart, onEnd, onError }) {
         super({ _awaitHandler: true });
-        this.config = config6;
+        this.config = config4;
         this.argOnStart = onStart;
         this.argOnEnd = onEnd;
         this.argOnError = onError;
@@ -80575,8 +80575,8 @@ function _generateMermaidGraphStyles(nodeColors) {
 `;
   return styles2;
 }
-function drawMermaid(nodes, edges, config6) {
-  const { firstNode, lastNode, nodeColors, withStyles = true, curveStyle = "linear", wrapLabelNWords = 9 } = config6 ?? {};
+function drawMermaid(nodes, edges, config4) {
+  const { firstNode, lastNode, nodeColors, withStyles = true, curveStyle = "linear", wrapLabelNWords = 9 } = config4 ?? {};
   let mermaidGraph = withStyles ? `%%{init: {'flowchart': {'curve': '${curveStyle}'}}}%%
 graph TD;
 ` : "graph TD;\n";
@@ -80638,9 +80638,9 @@ graph TD;
   if (withStyles) mermaidGraph += _generateMermaidGraphStyles(nodeColors ?? {});
   return mermaidGraph;
 }
-async function drawMermaidImage(mermaidSyntax, config6) {
-  let backgroundColor = config6?.backgroundColor ?? "white";
-  const imageType = config6?.imageType ?? "png";
+async function drawMermaidImage(mermaidSyntax, config4) {
+  let backgroundColor = config4?.backgroundColor ?? "white";
+  const imageType = config4?.imageType ?? "png";
   const mermaidSyntaxEncoded = toBase64Url(mermaidSyntax);
   if (backgroundColor !== void 0) {
     if (!/^#(?:[0-9a-fA-F]{3}){1,2}$/.test(backgroundColor)) backgroundColor = `!${backgroundColor}`;
@@ -81020,10 +81020,10 @@ var init_base4 = __esm({
       * @param config New configuration parameters to attach to the new runnable.
       * @returns A new RunnableBinding with a config matching what's passed.
       */
-      withConfig(config6) {
+      withConfig(config4) {
         return new RunnableBinding({
           bound: this,
-          config: config6,
+          config: config4,
           kwargs: {}
         });
       }
@@ -81084,10 +81084,10 @@ var init_base4 = __esm({
       * @returns A readable stream that is also an iterable.
       */
       async stream(input, options) {
-        const config6 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this._streamIterator(input, config6),
-          config: config6
+          generator: this._streamIterator(input, config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -81121,12 +81121,12 @@ var init_base4 = __esm({
         return [runnableConfig, callOptions];
       }
       async _callWithConfig(func, input, options) {
-        const config6 = ensureConfig(options);
-        const runManager = await (await getCallbackManagerForConfig(config6))?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), config6.runId, config6?.runType, void 0, void 0, config6?.runName ?? this.getName());
-        delete config6.runId;
+        const config4 = ensureConfig(options);
+        const runManager = await (await getCallbackManagerForConfig(config4))?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), config4.runId, config4?.runType, void 0, void 0, config4?.runName ?? this.getName());
+        delete config4.runId;
         let output;
         try {
-          output = await raceWithSignal(func.call(this, input, config6, runManager), config6.signal);
+          output = await raceWithSignal(func.call(this, input, config4, runManager), config4.signal);
         } catch (e) {
           await runManager?.handleChainError(e);
           throw e;
@@ -81175,8 +81175,8 @@ var init_base4 = __esm({
         let finalInputSupported = true;
         let finalOutput;
         let finalOutputSupported = true;
-        const config6 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config6);
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
         const outerThis = this;
         async function* wrapInputForTracing() {
           for await (const chunk of inputGenerator) {
@@ -81192,8 +81192,8 @@ var init_base4 = __esm({
         }
         let runManager;
         try {
-          const pipe2 = await pipeGeneratorWithSetup(transformer.bind(this), wrapInputForTracing(), async () => callbackManager_?.handleChainStart(this.toJSON(), { input: "" }, config6.runId, config6.runType, void 0, void 0, config6.runName ?? this.getName(), void 0, { lc_defers_inputs: true }), config6.signal, config6);
-          delete config6.runId;
+          const pipe2 = await pipeGeneratorWithSetup(transformer.bind(this), wrapInputForTracing(), async () => callbackManager_?.handleChainStart(this.toJSON(), { input: "" }, config4.runId, config4.runType, void 0, void 0, config4.runName ?? this.getName(), void 0, { lc_defers_inputs: true }), config4.signal, config4);
+          delete config4.runId;
           runManager = pipe2.setup;
           const streamEventsHandler = runManager?.handlers.find(isStreamEventsHandler);
           let iterator2 = pipe2.output;
@@ -81285,19 +81285,19 @@ var init_base4 = __esm({
           autoClose: false,
           _schemaFormat: "original"
         });
-        const config6 = ensureConfig(options);
-        yield* this._streamLog(input, logStreamCallbackHandler, config6);
+        const config4 = ensureConfig(options);
+        yield* this._streamLog(input, logStreamCallbackHandler, config4);
       }
-      async *_streamLog(input, logStreamCallbackHandler, config6) {
-        const { callbacks } = config6;
-        if (callbacks === void 0) config6.callbacks = [logStreamCallbackHandler];
-        else if (Array.isArray(callbacks)) config6.callbacks = callbacks.concat([logStreamCallbackHandler]);
+      async *_streamLog(input, logStreamCallbackHandler, config4) {
+        const { callbacks } = config4;
+        if (callbacks === void 0) config4.callbacks = [logStreamCallbackHandler];
+        else if (Array.isArray(callbacks)) config4.callbacks = callbacks.concat([logStreamCallbackHandler]);
         else {
           const copiedCallbacks = callbacks.copy();
           copiedCallbacks.addHandler(logStreamCallbackHandler, true);
-          config6.callbacks = copiedCallbacks;
+          config4.callbacks = copiedCallbacks;
         }
-        const runnableStreamPromise = this.stream(input, config6);
+        const runnableStreamPromise = this.stream(input, config4);
         async function consumeRunnableStream() {
           try {
             const runnableStream = await runnableStreamPromise;
@@ -81333,32 +81333,32 @@ var init_base4 = __esm({
           ...streamOptions,
           autoClose: false
         });
-        const config6 = ensureConfig(options);
-        const runId = config6.runId ?? v7_default();
-        config6.runId = runId;
-        const callbacks = config6.callbacks;
-        if (callbacks === void 0) config6.callbacks = [eventStreamer];
-        else if (Array.isArray(callbacks)) config6.callbacks = callbacks.concat(eventStreamer);
+        const config4 = ensureConfig(options);
+        const runId = config4.runId ?? v7_default();
+        config4.runId = runId;
+        const callbacks = config4.callbacks;
+        if (callbacks === void 0) config4.callbacks = [eventStreamer];
+        else if (Array.isArray(callbacks)) config4.callbacks = callbacks.concat(eventStreamer);
         else {
           const copiedCallbacks = callbacks.copy();
           copiedCallbacks.addHandler(eventStreamer, true);
-          config6.callbacks = copiedCallbacks;
+          config4.callbacks = copiedCallbacks;
         }
         const abortController = new AbortController();
         const outerThis = this;
         async function consumeRunnableStream() {
           let signal;
           try {
-            if (config6.signal) if ("any" in AbortSignal) signal = AbortSignal.any([abortController.signal, config6.signal]);
+            if (config4.signal) if ("any" in AbortSignal) signal = AbortSignal.any([abortController.signal, config4.signal]);
             else {
               const composed = new AbortController();
-              config6.signal.addEventListener("abort", () => composed.abort(), { once: true });
+              config4.signal.addEventListener("abort", () => composed.abort(), { once: true });
               abortController.signal.addEventListener("abort", () => composed.abort(), { once: true });
               signal = composed.signal;
             }
             else signal = abortController.signal;
             const runnableStream = await outerThis.stream(input, {
-              ...config6,
+              ...config4,
               signal
             });
             const tappedStream = eventStreamer.tapOutputIterable(runId, runnableStream);
@@ -81392,17 +81392,17 @@ var init_base4 = __esm({
       async *_streamEventsV1(input, options, streamOptions) {
         let runLog;
         let hasEncounteredStartEvent = false;
-        const config6 = ensureConfig(options);
-        const rootTags = config6.tags ?? [];
-        const rootMetadata = config6.metadata ?? {};
-        const rootName = config6.runName ?? this.getName();
+        const config4 = ensureConfig(options);
+        const rootTags = config4.tags ?? [];
+        const rootMetadata = config4.metadata ?? {};
+        const rootName = config4.runName ?? this.getName();
         const logStreamCallbackHandler = new LogStreamCallbackHandler({
           ...streamOptions,
           autoClose: false,
           _schemaFormat: "streaming_events"
         });
         const rootEventFilter = new _RootEventFilter({ ...streamOptions });
-        const logStream = this._streamLog(input, logStreamCallbackHandler, config6);
+        const logStream = this._streamLog(input, logStreamCallbackHandler, config4);
         for await (const log of logStream) {
           if (!runLog) runLog = RunLog.fromRunLogPatch(log);
           else runLog = runLog.concat(log);
@@ -81497,8 +81497,8 @@ var init_base4 = __esm({
         return new RunnableBinding({
           bound: this,
           config: {},
-          configFactories: [(config6) => ({ callbacks: [new RootListenersTracer({
-            config: config6,
+          configFactories: [(config4) => ({ callbacks: [new RootListenersTracer({
+            config: config4,
             onStart,
             onEnd,
             onError
@@ -81542,16 +81542,16 @@ var init_base4 = __esm({
         return this.bound.getName(suffix);
       }
       async _mergeConfig(...options) {
-        const config6 = mergeConfigs(this.config, ...options);
-        return mergeConfigs(config6, ...this.configFactories ? await Promise.all(this.configFactories.map(async (configFactory) => await configFactory(config6))) : []);
+        const config4 = mergeConfigs(this.config, ...options);
+        return mergeConfigs(config4, ...this.configFactories ? await Promise.all(this.configFactories.map(async (configFactory) => await configFactory(config4))) : []);
       }
-      withConfig(config6) {
+      withConfig(config4) {
         return new this.constructor({
           bound: this.bound,
           kwargs: this.kwargs,
           config: {
             ...this.config,
-            ...config6
+            ...config4
           }
         });
       }
@@ -81613,8 +81613,8 @@ var init_base4 = __esm({
           bound: this.bound,
           kwargs: this.kwargs,
           config: this.config,
-          configFactories: [(config6) => ({ callbacks: [new RootListenersTracer({
-            config: config6,
+          configFactories: [(config4) => ({ callbacks: [new RootListenersTracer({
+            config: config4,
             onStart,
             onEnd,
             onError
@@ -81639,8 +81639,8 @@ var init_base4 = __esm({
       * @param config The configuration to invoke the runnable with.
       * @returns A promise that resolves to the output of the runnable.
       */
-      async invoke(inputs, config6) {
-        return this._callWithConfig(this._invoke.bind(this), inputs, config6);
+      async invoke(inputs, config4) {
+        return this._callWithConfig(this._invoke.bind(this), inputs, config4);
       }
       /**
       * A helper method that is used to invoke the runnable with the specified input and configuration.
@@ -81648,8 +81648,8 @@ var init_base4 = __esm({
       * @param config The configuration to invoke the runnable with.
       * @returns A promise that resolves to the output of the runnable.
       */
-      async _invoke(inputs, config6, runManager) {
-        return this.bound.batch(inputs, patchConfig(config6, { callbacks: runManager?.getChild() }));
+      async _invoke(inputs, config4, runManager) {
+        return this.bound.batch(inputs, patchConfig(config4, { callbacks: runManager?.getChild() }));
       }
       /**
       * Bind lifecycle listeners to a Runnable, returning a new Runnable.
@@ -81683,12 +81683,12 @@ var init_base4 = __esm({
         this.maxAttemptNumber = fields.maxAttemptNumber ?? this.maxAttemptNumber;
         this.onFailedAttempt = fields.onFailedAttempt ?? this.onFailedAttempt;
       }
-      _patchConfigForRetry(attempt, config6, runManager) {
+      _patchConfigForRetry(attempt, config4, runManager) {
         const tag = attempt > 1 ? `retry:attempt:${attempt}` : void 0;
-        return patchConfig(config6, { callbacks: runManager?.getChild(tag) });
+        return patchConfig(config4, { callbacks: runManager?.getChild(tag) });
       }
-      async _invoke(input, config6, runManager) {
-        return pRetry2((attemptNumber) => super.invoke(input, this._patchConfigForRetry(attemptNumber, config6, runManager)), {
+      async _invoke(input, config4, runManager) {
+        return pRetry2((attemptNumber) => super.invoke(input, this._patchConfigForRetry(attemptNumber, config4, runManager)), {
           onFailedAttempt: ({ error: error48 }) => this.onFailedAttempt(error48, input),
           retries: Math.max(this.maxAttemptNumber - 1, 0),
           randomize: true
@@ -81704,8 +81704,8 @@ var init_base4 = __esm({
       * @param config The config for the runnable.
       * @returns A promise that resolves to the output of the runnable.
       */
-      async invoke(input, config6) {
-        return this._callWithConfig(this._invoke.bind(this), input, config6);
+      async invoke(input, config4) {
+        return this._callWithConfig(this._invoke.bind(this), input, config4);
       }
       async _batch(inputs, configs, runManagers, batchOptions) {
         const resultsMap = {};
@@ -81772,16 +81772,16 @@ var init_base4 = __esm({
         ];
       }
       async invoke(input, options) {
-        const config6 = ensureConfig(options);
-        const runManager = await (await getCallbackManagerForConfig(config6))?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), config6.runId, void 0, void 0, void 0, config6?.runName);
-        delete config6.runId;
+        const config4 = ensureConfig(options);
+        const runManager = await (await getCallbackManagerForConfig(config4))?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), config4.runId, void 0, void 0, void 0, config4?.runName);
+        delete config4.runId;
         let nextStepInput = input;
         let finalOutput;
         try {
           const initialSteps = [this.first, ...this.middle];
-          for (let i = 0; i < initialSteps.length; i += 1) nextStepInput = await raceWithSignal(initialSteps[i].invoke(nextStepInput, patchConfig(config6, { callbacks: runManager?.getChild(this.omitSequenceTags ? void 0 : `seq:step:${i + 1}`) })), config6.signal);
-          if (config6.signal?.aborted) throw getAbortSignalError(config6.signal);
-          finalOutput = await this.last.invoke(nextStepInput, patchConfig(config6, { callbacks: runManager?.getChild(this.omitSequenceTags ? void 0 : `seq:step:${this.steps.length}`) }));
+          for (let i = 0; i < initialSteps.length; i += 1) nextStepInput = await raceWithSignal(initialSteps[i].invoke(nextStepInput, patchConfig(config4, { callbacks: runManager?.getChild(this.omitSequenceTags ? void 0 : `seq:step:${i + 1}`) })), config4.signal);
+          if (config4.signal?.aborted) throw getAbortSignalError(config4.signal);
+          finalOutput = await this.last.invoke(nextStepInput, patchConfig(config4, { callbacks: runManager?.getChild(this.omitSequenceTags ? void 0 : `seq:step:${this.steps.length}`) }));
         } catch (e) {
           await runManager?.handleChainError(e);
           throw e;
@@ -81848,11 +81848,11 @@ var init_base4 = __esm({
         }
         await runManager?.handleChainEnd(_coerceToDict2(finalOutput, "output"));
       }
-      getGraph(config6) {
+      getGraph(config4) {
         const graph = new Graph();
         let currentLastNode = null;
         this.steps.forEach((step, index2) => {
-          const stepGraph = step.getGraph(config6);
+          const stepGraph = step.getGraph(config4);
           if (index2 !== 0) stepGraph.trimFirstNode();
           if (index2 !== this.steps.length - 1) stepGraph.trimLastNode();
           graph.extend(stepGraph);
@@ -81915,15 +81915,15 @@ var init_base4 = __esm({
         return new RunnableMap2({ steps });
       }
       async invoke(input, options) {
-        const config6 = ensureConfig(options);
-        const runManager = await (await getCallbackManagerForConfig(config6))?.handleChainStart(this.toJSON(), { input }, config6.runId, void 0, void 0, void 0, config6?.runName);
-        delete config6.runId;
+        const config4 = ensureConfig(options);
+        const runManager = await (await getCallbackManagerForConfig(config4))?.handleChainStart(this.toJSON(), { input }, config4.runId, void 0, void 0, void 0, config4?.runName);
+        delete config4.runId;
         const output = {};
         try {
           const promises = Object.entries(this.steps).map(async ([key, runnable]) => {
-            output[key] = await runnable.invoke(input, patchConfig(config6, { callbacks: runManager?.getChild(`map:key:${key}`) }));
+            output[key] = await runnable.invoke(input, patchConfig(config4, { callbacks: runManager?.getChild(`map:key:${key}`) }));
           });
-          await raceWithSignal(Promise.all(promises), config6.signal);
+          await raceWithSignal(Promise.all(promises), config4.signal);
         } catch (e) {
           await runManager?.handleChainError(e);
           throw e;
@@ -81962,10 +81962,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config6 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config6),
-          config: config6
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -81981,23 +81981,23 @@ var init_base4 = __esm({
         this.func = fields.func;
       }
       async invoke(input, options) {
-        const [config6] = this._getOptionsList(options ?? {}, 1);
-        const callbacks = await getCallbackManagerForConfig(config6);
-        return raceWithSignal(this.func(patchConfig(config6, { callbacks }), input), config6?.signal);
+        const [config4] = this._getOptionsList(options ?? {}, 1);
+        const callbacks = await getCallbackManagerForConfig(config4);
+        return raceWithSignal(this.func(patchConfig(config4, { callbacks }), input), config4?.signal);
       }
       async *_streamIterator(input, options) {
-        const [config6] = this._getOptionsList(options ?? {}, 1);
+        const [config4] = this._getOptionsList(options ?? {}, 1);
         const result = await this.invoke(input, options);
         if (isAsyncIterable(result)) {
           for await (const item of result) {
-            config6?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             yield item;
           }
           return;
         }
         if (isIterator(result)) {
           while (true) {
-            config6?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             const state = result.next();
             if (state.done) break;
             yield state.value;
@@ -82025,17 +82025,17 @@ var init_base4 = __esm({
       static from(func) {
         return new RunnableLambda2({ func });
       }
-      async _invoke(input, config6, runManager) {
+      async _invoke(input, config4, runManager) {
         return new Promise((resolve, reject) => {
-          const childConfig = patchConfig(config6, {
+          const childConfig = patchConfig(config4, {
             callbacks: runManager?.getChild(),
-            recursionLimit: (config6?.recursionLimit ?? 25) - 1
+            recursionLimit: (config4?.recursionLimit ?? 25) - 1
           });
           AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
             try {
               let output = await this.func(input, { ...childConfig });
               if (output && Runnable.isRunnable(output)) {
-                if (config6?.recursionLimit === 0) throw new Error("Recursion limit reached.");
+                if (config4?.recursionLimit === 0) throw new Error("Recursion limit reached.");
                 output = await output.invoke(input, {
                   ...childConfig,
                   recursionLimit: (childConfig.recursionLimit ?? 25) - 1
@@ -82043,7 +82043,7 @@ var init_base4 = __esm({
               } else if (isAsyncIterable(output)) {
                 let finalOutput;
                 for await (const chunk of consumeAsyncIterableInContext(childConfig, output)) {
-                  config6?.signal?.throwIfAborted();
+                  config4?.signal?.throwIfAborted();
                   if (finalOutput === void 0) finalOutput = chunk;
                   else try {
                     finalOutput = this._concatOutputChunks(finalOutput, chunk);
@@ -82055,7 +82055,7 @@ var init_base4 = __esm({
               } else if (isIterableIterator(output)) {
                 let finalOutput;
                 for (const chunk of consumeIteratorInContext(childConfig, output)) {
-                  config6?.signal?.throwIfAborted();
+                  config4?.signal?.throwIfAborted();
                   if (finalOutput === void 0) finalOutput = chunk;
                   else try {
                     finalOutput = this._concatOutputChunks(finalOutput, chunk);
@@ -82075,7 +82075,7 @@ var init_base4 = __esm({
       async invoke(input, options) {
         return this._callWithConfig(this._invoke.bind(this), input, options);
       }
-      async *_transform(generator, runManager, config6) {
+      async *_transform(generator, runManager, config4) {
         let finalChunk;
         for await (const chunk of generator) if (finalChunk === void 0) finalChunk = chunk;
         else try {
@@ -82083,9 +82083,9 @@ var init_base4 = __esm({
         } catch {
           finalChunk = chunk;
         }
-        const childConfig = patchConfig(config6, {
+        const childConfig = patchConfig(config4, {
           callbacks: runManager?.getChild(),
-          recursionLimit: (config6?.recursionLimit ?? 25) - 1
+          recursionLimit: (config4?.recursionLimit ?? 25) - 1
         });
         const output = await new Promise((resolve, reject) => {
           AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
@@ -82100,15 +82100,15 @@ var init_base4 = __esm({
           });
         });
         if (output && Runnable.isRunnable(output)) {
-          if (config6?.recursionLimit === 0) throw new Error("Recursion limit reached.");
+          if (config4?.recursionLimit === 0) throw new Error("Recursion limit reached.");
           const stream4 = await output.stream(finalChunk, childConfig);
           for await (const chunk of stream4) yield chunk;
         } else if (isAsyncIterable(output)) for await (const chunk of consumeAsyncIterableInContext(childConfig, output)) {
-          config6?.signal?.throwIfAborted();
+          config4?.signal?.throwIfAborted();
           yield chunk;
         }
         else if (isIterableIterator(output)) for (const chunk of consumeIteratorInContext(childConfig, output)) {
-          config6?.signal?.throwIfAborted();
+          config4?.signal?.throwIfAborted();
           yield chunk;
         }
         else yield output;
@@ -82120,10 +82120,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config6 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config6),
-          config: config6
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -82149,15 +82149,15 @@ var init_base4 = __esm({
         for (const fallback of this.fallbacks) yield fallback;
       }
       async invoke(input, options) {
-        const config6 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config6);
-        const { runId, ...otherConfigFields } = config6;
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
+        const { runId, ...otherConfigFields } = config4;
         const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), runId, void 0, void 0, void 0, otherConfigFields?.runName);
         const childConfig = patchConfig(otherConfigFields, { callbacks: runManager?.getChild() });
         return await AsyncLocalStorageProviderSingleton2.runWithConfig(childConfig, async () => {
           let firstError;
           for (const runnable of this.runnables()) {
-            config6?.signal?.throwIfAborted();
+            config4?.signal?.throwIfAborted();
             try {
               const output = await runnable.invoke(input, childConfig);
               await runManager?.handleChainEnd(_coerceToDict2(output, "output"));
@@ -82172,14 +82172,14 @@ var init_base4 = __esm({
         });
       }
       async *_streamIterator(input, options) {
-        const config6 = ensureConfig(options);
-        const callbackManager_ = await getCallbackManagerForConfig(config6);
-        const { runId, ...otherConfigFields } = config6;
+        const config4 = ensureConfig(options);
+        const callbackManager_ = await getCallbackManagerForConfig(config4);
+        const { runId, ...otherConfigFields } = config4;
         const runManager = await callbackManager_?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), runId, void 0, void 0, void 0, otherConfigFields?.runName);
         let firstError;
         let stream4;
         for (const runnable of this.runnables()) {
-          config6?.signal?.throwIfAborted();
+          config4?.signal?.throwIfAborted();
           const childConfig = patchConfig(otherConfigFields, { callbacks: runManager?.getChild() });
           try {
             stream4 = consumeAsyncIterableInContext(childConfig, await runnable.stream(input, childConfig));
@@ -82212,7 +82212,7 @@ var init_base4 = __esm({
       async batch(inputs, options, batchOptions) {
         if (batchOptions?.returnExceptions) throw new Error("Not implemented.");
         const configList = this._getOptionsList(options ?? {}, inputs.length);
-        const callbackManagers = await Promise.all(configList.map((config6) => getCallbackManagerForConfig(config6)));
+        const callbackManagers = await Promise.all(configList.map((config4) => getCallbackManagerForConfig(config4)));
         const runManagers = await Promise.all(callbackManagers.map(async (callbackManager, i) => {
           const handleStartRes = await callbackManager?.handleChainStart(this.toJSON(), _coerceToDict2(inputs[i], "input"), configList[i].runId, void 0, void 0, void 0, configList[i].runName);
           delete configList[i].runId;
@@ -82273,10 +82273,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config6 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config6),
-          config: config6
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -82317,10 +82317,10 @@ var init_base4 = __esm({
         async function* generator() {
           yield input;
         }
-        const config6 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         const wrappedGenerator = new AsyncGeneratorWithSetup({
-          generator: this.transform(generator(), config6),
-          config: config6
+          generator: this.transform(generator(), config4),
+          config: config4
         });
         await wrappedGenerator.setup;
         return IterableReadableStream.fromAsyncGenerator(wrappedGenerator);
@@ -83950,7 +83950,7 @@ var init_base5 = __esm({
       * @param callOptions Call options for the model
       * @returns A unique cache key.
       */
-      _getSerializedCacheKeyParametersForCall({ config: config6, ...callOptions }) {
+      _getSerializedCacheKeyParametersForCall({ config: config4, ...callOptions }) {
         const params = {
           ...this._identifyingParams(),
           ...callOptions,
@@ -84027,15 +84027,15 @@ var init_passthrough = __esm({
         if (fields) this.func = fields.func;
       }
       async invoke(input, options) {
-        const config6 = ensureConfig(options);
-        if (this.func) await this.func(input, config6);
-        return this._callWithConfig((input2) => Promise.resolve(input2), input, config6);
+        const config4 = ensureConfig(options);
+        if (this.func) await this.func(input, config4);
+        return this._callWithConfig((input2) => Promise.resolve(input2), input, config4);
       }
       async *transform(generator, options) {
-        const config6 = ensureConfig(options);
+        const config4 = ensureConfig(options);
         let finalOutput;
         let finalOutputSupported = true;
-        for await (const chunk of this._transformStreamWithConfig(generator, (input) => input, config6)) {
+        for await (const chunk of this._transformStreamWithConfig(generator, (input) => input, config4)) {
           yield chunk;
           if (finalOutputSupported) if (finalOutput === void 0) finalOutput = chunk;
           else try {
@@ -84045,7 +84045,7 @@ var init_passthrough = __esm({
             finalOutputSupported = false;
           }
         }
-        if (this.func && finalOutput !== void 0) await this.func(finalOutput, config6);
+        if (this.func && finalOutput !== void 0) await this.func(finalOutput, config4);
       }
       /**
       * A runnable that assigns key-value pairs to the input.
@@ -84185,31 +84185,31 @@ var init_branch = __esm({
           default: defaultBranch
         });
       }
-      async _invoke(input, config6, runManager) {
+      async _invoke(input, config4, runManager) {
         let result;
         for (let i = 0; i < this.branches.length; i += 1) {
           const [condition, branchRunnable] = this.branches[i];
-          if (await condition.invoke(input, patchConfig(config6, { callbacks: runManager?.getChild(`condition:${i + 1}`) }))) {
-            result = await branchRunnable.invoke(input, patchConfig(config6, { callbacks: runManager?.getChild(`branch:${i + 1}`) }));
+          if (await condition.invoke(input, patchConfig(config4, { callbacks: runManager?.getChild(`condition:${i + 1}`) }))) {
+            result = await branchRunnable.invoke(input, patchConfig(config4, { callbacks: runManager?.getChild(`branch:${i + 1}`) }));
             break;
           }
         }
-        if (!result) result = await this.default.invoke(input, patchConfig(config6, { callbacks: runManager?.getChild("branch:default") }));
+        if (!result) result = await this.default.invoke(input, patchConfig(config4, { callbacks: runManager?.getChild("branch:default") }));
         return result;
       }
-      async invoke(input, config6 = {}) {
-        return this._callWithConfig(this._invoke, input, config6);
+      async invoke(input, config4 = {}) {
+        return this._callWithConfig(this._invoke, input, config4);
       }
-      async *_streamIterator(input, config6) {
-        const runManager = await (await getCallbackManagerForConfig(config6))?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), config6?.runId, void 0, void 0, void 0, config6?.runName);
+      async *_streamIterator(input, config4) {
+        const runManager = await (await getCallbackManagerForConfig(config4))?.handleChainStart(this.toJSON(), _coerceToDict2(input, "input"), config4?.runId, void 0, void 0, void 0, config4?.runName);
         let finalOutput;
         let finalOutputSupported = true;
         let stream4;
         try {
           for (let i = 0; i < this.branches.length; i += 1) {
             const [condition, branchRunnable] = this.branches[i];
-            if (await condition.invoke(input, patchConfig(config6, { callbacks: runManager?.getChild(`condition:${i + 1}`) }))) {
-              stream4 = await branchRunnable.stream(input, patchConfig(config6, { callbacks: runManager?.getChild(`branch:${i + 1}`) }));
+            if (await condition.invoke(input, patchConfig(config4, { callbacks: runManager?.getChild(`condition:${i + 1}`) }))) {
+              stream4 = await branchRunnable.stream(input, patchConfig(config4, { callbacks: runManager?.getChild(`branch:${i + 1}`) }));
               for await (const chunk of stream4) {
                 yield chunk;
                 if (finalOutputSupported) if (finalOutput === void 0) finalOutput = chunk;
@@ -84224,7 +84224,7 @@ var init_branch = __esm({
             }
           }
           if (stream4 === void 0) {
-            stream4 = await this.default.stream(input, patchConfig(config6, { callbacks: runManager?.getChild("branch:default") }));
+            stream4 = await this.default.stream(input, patchConfig(config4, { callbacks: runManager?.getChild("branch:default") }));
             for await (const chunk of stream4) {
               yield chunk;
               if (finalOutputSupported) if (finalOutput === void 0) finalOutput = chunk;
@@ -84266,11 +84266,11 @@ var init_history = __esm({
         let historyChain = RunnableLambda.from((input, options) => this._enterHistory(input, options ?? {})).withConfig({ runName: "loadHistory" });
         const messagesKey = fields.historyMessagesKey ?? fields.inputMessagesKey;
         if (messagesKey) historyChain = RunnablePassthrough.assign({ [messagesKey]: historyChain }).withConfig({ runName: "insertHistory" });
-        const bound = historyChain.pipe(fields.runnable.withListeners({ onEnd: (run, config7) => this._exitHistory(run, config7 ?? {}) })).withConfig({ runName: "RunnableWithMessageHistory" });
-        const config6 = fields.config ?? {};
+        const bound = historyChain.pipe(fields.runnable.withListeners({ onEnd: (run, config5) => this._exitHistory(run, config5 ?? {}) })).withConfig({ runName: "RunnableWithMessageHistory" });
+        const config4 = fields.config ?? {};
         super({
           ...fields,
-          config: config6,
+          config: config4,
           bound
         });
         this.runnable = fields.runnable;
@@ -84315,8 +84315,8 @@ Got ${JSON.stringify(parsedInputValue, null, 2)}`);
         if (this.historyMessagesKey === void 0) return messages.concat(this._getInputMessages(input));
         return messages;
       }
-      async _exitHistory(run, config6) {
-        const history = config6.configurable?.messageHistory;
+      async _exitHistory(run, config4) {
+        const history = config4.configurable?.messageHistory;
         let inputs;
         if (Array.isArray(run.inputs) && Array.isArray(run.inputs[0])) inputs = run.inputs[0];
         else inputs = run.inputs;
@@ -84331,15 +84331,15 @@ Got ${JSON.stringify(parsedInputValue, null, 2)}`);
         await history.addMessages([...inputMessages, ...outputMessages]);
       }
       async _mergeConfig(...configs) {
-        const config6 = await super._mergeConfig(...configs);
-        if (!config6.configurable || !config6.configurable.sessionId) {
+        const config4 = await super._mergeConfig(...configs);
+        if (!config4.configurable || !config4.configurable.sessionId) {
           const exampleInput = { [this.inputMessagesKey ?? "input"]: "foo" };
           throw new Error(`sessionId is required. Pass it in as part of the config argument to .invoke() or .stream()
 eg. chain.invoke(${JSON.stringify(exampleInput)}, ${JSON.stringify({ configurable: { sessionId: "123" } })})`);
         }
-        const { sessionId } = config6.configurable;
-        config6.configurable.messageHistory = await this.getMessageHistory(sessionId);
-        return config6;
+        const { sessionId } = config4.configurable;
+        config4.configurable.messageHistory = await this.getMessageHistory(sessionId);
+        return config4;
       }
     };
   }
@@ -86654,7 +86654,7 @@ function assembleStructuredOutputPipeline(llm, outputParser, includeRaw, runName
     const result2 = llm.pipe(outputParser);
     return runName ? result2.withConfig({ runName }) : result2;
   }
-  const parserAssign = RunnablePassthrough.assign({ parsed: (input, config6) => outputParser.invoke(input.raw, config6) });
+  const parserAssign = RunnablePassthrough.assign({ parsed: (input, config4) => outputParser.invoke(input.raw, config4) });
   const parserNone = RunnablePassthrough.assign({ parsed: () => null });
   const parsedWithFallback = parserAssign.withFallbacks({ fallbacks: [parserNone] });
   const result = RunnableSequence.from([{ raw: llm }, parsedWithFallback]);
@@ -87063,14 +87063,14 @@ var init_chat_models = __esm({
         const promptMessages = promptValues.map((promptValue) => promptValue.toChatMessages());
         return this.generate(promptMessages, options, callbacks);
       }
-      withStructuredOutput(outputSchema, config6) {
+      withStructuredOutput(outputSchema, config4) {
         if (typeof this.bindTools !== "function") throw new Error(`Chat model must implement ".bindTools()" to use withStructuredOutput.`);
-        if (config6?.strict) throw new Error(`"strict" mode is not supported for this model by default.`);
+        if (config4?.strict) throw new Error(`"strict" mode is not supported for this model by default.`);
         const schema = outputSchema;
-        const name = config6?.name;
+        const name = config4?.name;
         const description = getSchemaDescription(schema) ?? "A function available to call.";
-        const method = config6?.method;
-        const includeRaw = config6?.includeRaw;
+        const method = config4?.method;
+        const includeRaw = config4?.includeRaw;
         if (method === "jsonMode") throw new Error(`Base withStructuredOutput implementation only supports "functionCalling" as a method.`);
         let functionName = name ?? "extract";
         if (!isInteropZodSchema(schema) && !isSerializableSchema(schema) && "name" in schema) functionName = schema.name;
@@ -88548,12 +88548,12 @@ var init_schemas2 = __esm({
 
 // node_modules/zod/v4/classic/compat.js
 function setErrorMap2(map2) {
-  config4({
+  config2({
     customError: map2
   });
 }
 function getErrorMap2() {
-  return config4().customError;
+  return config2().customError;
 }
 var ZodIssueCode2, ZodFirstPartyTypeKind2;
 var init_compat = __esm({
@@ -89192,7 +89192,7 @@ __export(external_exports2, {
   clone: () => clone,
   codec: () => codec,
   coerce: () => coerce_exports,
-  config: () => config4,
+  config: () => config2,
   core: () => core_exports2,
   cuid: () => cuid3,
   cuid2: () => cuid22,
@@ -89349,7 +89349,7 @@ var init_external2 = __esm({
     init_iso();
     init_iso();
     init_coerce();
-    config4(en_default());
+    config2(en_default());
   }
 });
 
@@ -89376,9 +89376,9 @@ function tool(func, fields) {
   if (!fields.schema || isSimpleStringSchema || isStringJSONSchema) return new DynamicTool({
     ...fields,
     description: fields.description ?? fields.schema?.description ?? `${fields.name} tool`,
-    func: async (input, runManager, config6) => {
+    func: async (input, runManager, config4) => {
       return new Promise((resolve, reject) => {
-        const childConfig = patchConfig(config6, { callbacks: runManager?.getChild() });
+        const childConfig = patchConfig(config4, { callbacks: runManager?.getChild() });
         AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
           try {
             resolve(func(input, childConfig));
@@ -89395,20 +89395,20 @@ function tool(func, fields) {
     ...fields,
     description,
     schema,
-    func: async (input, runManager, config6) => {
+    func: async (input, runManager, config4) => {
       return new Promise((resolve, reject) => {
         let listener;
         const cleanup = () => {
-          if (config6?.signal && listener) config6.signal.removeEventListener("abort", listener);
+          if (config4?.signal && listener) config4.signal.removeEventListener("abort", listener);
         };
-        if (config6?.signal) {
+        if (config4?.signal) {
           listener = () => {
             cleanup();
-            reject(getAbortSignalError(config6.signal));
+            reject(getAbortSignalError(config4.signal));
           };
-          config6.signal.addEventListener("abort", listener, { once: true });
+          config4.signal.addEventListener("abort", listener, { once: true });
         }
-        const childConfig = patchConfig(config6, { callbacks: runManager?.getChild() });
+        const childConfig = patchConfig(config4, { callbacks: runManager?.getChild() });
         AsyncLocalStorageProviderSingleton2.runWithConfig(pickRunnableConfigKeys(childConfig), async () => {
           try {
             const result = await func(input, childConfig);
@@ -89416,7 +89416,7 @@ function tool(func, fields) {
               resolve(result);
               return;
             }
-            if (config6?.signal?.aborted) {
+            if (config4?.signal?.aborted) {
               cleanup();
               return;
             }
@@ -89537,9 +89537,9 @@ var init_tools2 = __esm({
       * @param config Optional configuration for the tool.
       * @returns A Promise that resolves with the tool's output.
       */
-      async invoke(input, config6) {
+      async invoke(input, config4) {
         let toolInput;
-        let enrichedConfig = ensureConfig(mergeConfigs(this.defaultConfig, config6));
+        let enrichedConfig = ensureConfig(mergeConfigs(this.defaultConfig, config4));
         if (_isToolCall(input)) {
           toolInput = input.args;
           enrichedConfig = {
@@ -89584,16 +89584,16 @@ Details: ${result2.errors.map((e) => `${e.keywordLocation}: ${e.error}`).join("\
           }
           parsed = inputForValidation;
         }
-        const config6 = parseCallbackConfigArg(configArg);
-        const callbackManager_ = CallbackManager.configure(config6.callbacks, this.callbacks, config6.tags || tags, this.tags, config6.metadata, this.metadata, { verbose: this.verbose });
+        const config4 = parseCallbackConfigArg(configArg);
+        const callbackManager_ = CallbackManager.configure(config4.callbacks, this.callbacks, config4.tags || tags, this.tags, config4.metadata, this.metadata, { verbose: this.verbose });
         let toolCallId;
         if (_isToolCall(arg)) toolCallId = arg.id;
-        if (!toolCallId && _configHasToolCallId(config6)) toolCallId = config6.toolCall.id;
-        const runManager = await callbackManager_?.handleToolStart(this.toJSON(), typeof arg === "string" ? arg : JSON.stringify(arg), config6.runId, void 0, void 0, void 0, config6.runName, toolCallId);
-        delete config6.runId;
+        if (!toolCallId && _configHasToolCallId(config4)) toolCallId = config4.toolCall.id;
+        const runManager = await callbackManager_?.handleToolStart(this.toJSON(), typeof arg === "string" ? arg : JSON.stringify(arg), config4.runId, void 0, void 0, void 0, config4.runName, toolCallId);
+        delete config4.runId;
         let result;
         try {
-          const raw = await this._call(parsed, runManager, config6);
+          const raw = await this._call(parsed, runManager, config4);
           result = isAsyncGenerator(raw) ? await consumeAsyncGenerator(raw, async (chunk) => {
             try {
               await runManager?.handleToolEvent(chunk);
@@ -89659,9 +89659,9 @@ Result: ${JSON.stringify(result)}`);
       * @deprecated Use .invoke() instead. Will be removed in 0.3.0.
       */
       async call(arg, configArg) {
-        const config6 = parseCallbackConfigArg(configArg);
-        if (config6.runName === void 0) config6.runName = this.name;
-        return super.call(arg, config6);
+        const config4 = parseCallbackConfigArg(configArg);
+        if (config4.runName === void 0) config4.runName = this.name;
+        return super.call(arg, config4);
       }
       /** @ignore */
       _call(input, runManager, parentConfig) {
@@ -89687,9 +89687,9 @@ Result: ${JSON.stringify(result)}`);
       * @deprecated Use .invoke() instead. Will be removed in 0.3.0.
       */
       async call(arg, configArg, tags) {
-        const config6 = parseCallbackConfigArg(configArg);
-        if (config6.runName === void 0) config6.runName = this.name;
-        return super.call(arg, config6, tags);
+        const config4 = parseCallbackConfigArg(configArg);
+        if (config4.runName === void 0) config4.runName = this.name;
+        return super.call(arg, config4, tags);
       }
       _call(arg, runManager, parentConfig) {
         return this.func(arg, runManager, parentConfig);
@@ -91616,9 +91616,9 @@ var init_json_output_functions_parsers = __esm({
       ];
       lc_serializable = true;
       argsOnly = true;
-      constructor(config6) {
+      constructor(config4) {
         super();
-        this.argsOnly = config6?.argsOnly ?? this.argsOnly;
+        this.argsOnly = config4?.argsOnly ?? this.argsOnly;
       }
       /**
       * Parses the output and returns a string representation of the function
@@ -91648,10 +91648,10 @@ var init_json_output_functions_parsers = __esm({
       lc_serializable = true;
       outputParser;
       argsOnly = true;
-      constructor(config6) {
-        super(config6);
-        this.argsOnly = config6?.argsOnly ?? this.argsOnly;
-        this.outputParser = new OutputFunctionsParser(config6);
+      constructor(config4) {
+        super(config4);
+        this.argsOnly = config4?.argsOnly ?? this.argsOnly;
+        this.outputParser = new OutputFunctionsParser(config4);
       }
       _diff(prev, next) {
         if (!next) return;
@@ -92142,44 +92142,44 @@ var init_mustache = __esm({
       }
       return tokens;
     };
-    Writer.prototype.render = function render(template, view2, partials, config6) {
-      var tags = this.getConfigTags(config6);
+    Writer.prototype.render = function render(template, view2, partials, config4) {
+      var tags = this.getConfigTags(config4);
       var tokens = this.parse(template, tags);
       var context2 = view2 instanceof Context ? view2 : new Context(view2, void 0);
-      return this.renderTokens(tokens, context2, partials, template, config6);
+      return this.renderTokens(tokens, context2, partials, template, config4);
     };
-    Writer.prototype.renderTokens = function renderTokens(tokens, context2, partials, originalTemplate, config6) {
+    Writer.prototype.renderTokens = function renderTokens(tokens, context2, partials, originalTemplate, config4) {
       var buffer = "";
       var token, symbol2, value;
       for (var i = 0, numTokens = tokens.length; i < numTokens; ++i) {
         value = void 0;
         token = tokens[i];
         symbol2 = token[0];
-        if (symbol2 === "#") value = this.renderSection(token, context2, partials, originalTemplate, config6);
-        else if (symbol2 === "^") value = this.renderInverted(token, context2, partials, originalTemplate, config6);
-        else if (symbol2 === ">") value = this.renderPartial(token, context2, partials, config6);
+        if (symbol2 === "#") value = this.renderSection(token, context2, partials, originalTemplate, config4);
+        else if (symbol2 === "^") value = this.renderInverted(token, context2, partials, originalTemplate, config4);
+        else if (symbol2 === ">") value = this.renderPartial(token, context2, partials, config4);
         else if (symbol2 === "&") value = this.unescapedValue(token, context2);
-        else if (symbol2 === "name") value = this.escapedValue(token, context2, config6);
+        else if (symbol2 === "name") value = this.escapedValue(token, context2, config4);
         else if (symbol2 === "text") value = this.rawValue(token);
         if (value !== void 0)
           buffer += value;
       }
       return buffer;
     };
-    Writer.prototype.renderSection = function renderSection(token, context2, partials, originalTemplate, config6) {
+    Writer.prototype.renderSection = function renderSection(token, context2, partials, originalTemplate, config4) {
       var self2 = this;
       var buffer = "";
       var value = context2.lookup(token[1]);
       function subRender(template) {
-        return self2.render(template, context2, partials, config6);
+        return self2.render(template, context2, partials, config4);
       }
       if (!value) return;
       if (isArray2(value)) {
         for (var j = 0, valueLength = value.length; j < valueLength; ++j) {
-          buffer += this.renderTokens(token[4], context2.push(value[j]), partials, originalTemplate, config6);
+          buffer += this.renderTokens(token[4], context2.push(value[j]), partials, originalTemplate, config4);
         }
       } else if (typeof value === "object" || typeof value === "string" || typeof value === "number") {
-        buffer += this.renderTokens(token[4], context2.push(value), partials, originalTemplate, config6);
+        buffer += this.renderTokens(token[4], context2.push(value), partials, originalTemplate, config4);
       } else if (isFunction3(value)) {
         if (typeof originalTemplate !== "string")
           throw new Error("Cannot use higher-order sections without the original template");
@@ -92187,14 +92187,14 @@ var init_mustache = __esm({
         if (value != null)
           buffer += value;
       } else {
-        buffer += this.renderTokens(token[4], context2, partials, originalTemplate, config6);
+        buffer += this.renderTokens(token[4], context2, partials, originalTemplate, config4);
       }
       return buffer;
     };
-    Writer.prototype.renderInverted = function renderInverted(token, context2, partials, originalTemplate, config6) {
+    Writer.prototype.renderInverted = function renderInverted(token, context2, partials, originalTemplate, config4) {
       var value = context2.lookup(token[1]);
       if (!value || isArray2(value) && value.length === 0)
-        return this.renderTokens(token[4], context2, partials, originalTemplate, config6);
+        return this.renderTokens(token[4], context2, partials, originalTemplate, config4);
     };
     Writer.prototype.indentPartial = function indentPartial(partial2, indentation, lineHasNonSpace) {
       var filteredIndentation = indentation.replace(/[^ \t]/g, "");
@@ -92206,9 +92206,9 @@ var init_mustache = __esm({
       }
       return partialByNl.join("\n");
     };
-    Writer.prototype.renderPartial = function renderPartial(token, context2, partials, config6) {
+    Writer.prototype.renderPartial = function renderPartial(token, context2, partials, config4) {
       if (!partials) return;
-      var tags = this.getConfigTags(config6);
+      var tags = this.getConfigTags(config4);
       var value = isFunction3(partials) ? partials(token[1]) : partials[token[1]];
       if (value != null) {
         var lineHasNonSpace = token[6];
@@ -92219,7 +92219,7 @@ var init_mustache = __esm({
           indentedValue = this.indentPartial(value, indentation, lineHasNonSpace);
         }
         var tokens = this.parse(indentedValue, tags);
-        return this.renderTokens(tokens, context2, partials, indentedValue, config6);
+        return this.renderTokens(tokens, context2, partials, indentedValue, config4);
       }
     };
     Writer.prototype.unescapedValue = function unescapedValue(token, context2) {
@@ -92227,8 +92227,8 @@ var init_mustache = __esm({
       if (value != null)
         return value;
     };
-    Writer.prototype.escapedValue = function escapedValue(token, context2, config6) {
-      var escape2 = this.getConfigEscape(config6) || mustache.escape;
+    Writer.prototype.escapedValue = function escapedValue(token, context2, config4) {
+      var escape2 = this.getConfigEscape(config4) || mustache.escape;
       var value = context2.lookup(token[1]);
       if (value != null)
         return typeof value === "number" && escape2 === mustache.escape ? String(value) : escape2(value);
@@ -92236,18 +92236,18 @@ var init_mustache = __esm({
     Writer.prototype.rawValue = function rawValue(token) {
       return token[1];
     };
-    Writer.prototype.getConfigTags = function getConfigTags(config6) {
-      if (isArray2(config6)) {
-        return config6;
-      } else if (config6 && typeof config6 === "object") {
-        return config6.tags;
+    Writer.prototype.getConfigTags = function getConfigTags(config4) {
+      if (isArray2(config4)) {
+        return config4;
+      } else if (config4 && typeof config4 === "object") {
+        return config4.tags;
       } else {
         return void 0;
       }
     };
-    Writer.prototype.getConfigEscape = function getConfigEscape(config6) {
-      if (config6 && typeof config6 === "object" && !isArray2(config6)) {
-        return config6.escape;
+    Writer.prototype.getConfigEscape = function getConfigEscape(config4) {
+      if (config4 && typeof config4 === "object" && !isArray2(config4)) {
+        return config4.escape;
       } else {
         return void 0;
       }
@@ -92285,11 +92285,11 @@ var init_mustache = __esm({
     mustache.parse = function parse7(template, tags) {
       return defaultWriter.parse(template, tags);
     };
-    mustache.render = function render2(template, view2, partials, config6) {
+    mustache.render = function render2(template, view2, partials, config4) {
       if (typeof template !== "string") {
         throw new TypeError('Invalid template! Template should be a "string" but "' + typeStr(template) + '" was given as the first argument for mustache#render(template, view, partials)');
       }
-      return defaultWriter.render(template, view2, partials, config6);
+      return defaultWriter.render(template, view2, partials, config4);
     };
     mustache.escape = escapeHtml;
     mustache.Scanner = Scanner;
@@ -96659,8 +96659,8 @@ function maxChannelVersion(...versions) {
     return compareChannelVersions(max, version2) >= 0 ? max : version2;
   });
 }
-function getCheckpointId(config6) {
-  return config6.configurable?.checkpoint_id || config6.configurable?.thread_ts || "";
+function getCheckpointId(config4) {
+  return config4.configurable?.checkpoint_id || config4.configurable?.thread_ts || "";
 }
 var BaseCheckpointSaver, WRITES_IDX_MAP;
 var init_base12 = __esm({
@@ -96673,8 +96673,8 @@ var init_base12 = __esm({
       constructor(serde) {
         this.serde = serde || this.serde;
       }
-      async get(config6) {
-        const value = await this.getTuple(config6);
+      async get(config4) {
+        const value = await this.getTuple(config4);
         return value ? value.checkpoint : void 0;
       }
       /**
@@ -96734,10 +96734,10 @@ var init_memory2 = __esm({
         deseriablizableCheckpoint.channel_versions ??= {};
         deseriablizableCheckpoint.channel_versions[TASKS2] = Object.keys(deseriablizableCheckpoint.channel_versions).length > 0 ? maxChannelVersion(...Object.values(deseriablizableCheckpoint.channel_versions)) : this.getNextVersion(void 0);
       }
-      async getTuple(config6) {
-        const thread_id = config6.configurable?.thread_id;
-        const checkpoint_ns = config6.configurable?.checkpoint_ns ?? "";
-        let checkpoint_id = getCheckpointId(config6);
+      async getTuple(config4) {
+        const thread_id = config4.configurable?.thread_id;
+        const checkpoint_ns = config4.configurable?.checkpoint_ns ?? "";
+        let checkpoint_id = getCheckpointId(config4);
         if (checkpoint_id) {
           const saved = this.storage[thread_id]?.[checkpoint_ns]?.[checkpoint_id];
           if (saved !== void 0) {
@@ -96753,7 +96753,7 @@ var init_memory2 = __esm({
               ];
             }));
             const checkpointTuple = {
-              config: config6,
+              config: config4,
               checkpoint: deserializedCheckpoint,
               metadata: await this.serde.loadsTyped("json", metadata),
               pendingWrites
@@ -96799,11 +96799,11 @@ var init_memory2 = __esm({
           }
         }
       }
-      async *list(config6, options) {
+      async *list(config4, options) {
         let { before, limit: limit2, filter: filter2 } = options ?? {};
-        const threadIds = config6.configurable?.thread_id ? [config6.configurable?.thread_id] : Object.keys(this.storage);
-        const configCheckpointNamespace = config6.configurable?.checkpoint_ns;
-        const configCheckpointId = config6.configurable?.checkpoint_id;
+        const threadIds = config4.configurable?.thread_id ? [config4.configurable?.thread_id] : Object.keys(this.storage);
+        const configCheckpointNamespace = config4.configurable?.checkpoint_ns;
+        const configCheckpointId = config4.configurable?.checkpoint_id;
         for (const threadId of threadIds) for (const checkpointNamespace of Object.keys(this.storage[threadId] ?? {})) {
           if (configCheckpointNamespace !== void 0 && checkpointNamespace !== configCheckpointNamespace) continue;
           const checkpoints = this.storage[threadId]?.[checkpointNamespace] ?? {};
@@ -96847,10 +96847,10 @@ var init_memory2 = __esm({
           }
         }
       }
-      async put(config6, checkpoint, metadata) {
+      async put(config4, checkpoint, metadata) {
         const preparedCheckpoint = copyCheckpoint(checkpoint);
-        const threadId = config6.configurable?.thread_id;
-        const checkpointNamespace = config6.configurable?.checkpoint_ns ?? "";
+        const threadId = config4.configurable?.thread_id;
+        const checkpointNamespace = config4.configurable?.checkpoint_ns ?? "";
         if (threadId === void 0) throw new Error(`Failed to put checkpoint. The passed RunnableConfig is missing a required "thread_id" field in its "configurable" property.`);
         if (!this.storage[threadId]) this.storage[threadId] = {};
         if (!this.storage[threadId][checkpointNamespace]) this.storage[threadId][checkpointNamespace] = {};
@@ -96858,7 +96858,7 @@ var init_memory2 = __esm({
         this.storage[threadId][checkpointNamespace][checkpoint.id] = [
           serializedCheckpoint,
           serializedMetadata,
-          config6.configurable?.checkpoint_id
+          config4.configurable?.checkpoint_id
         ];
         return { configurable: {
           thread_id: threadId,
@@ -96866,10 +96866,10 @@ var init_memory2 = __esm({
           checkpoint_id: checkpoint.id
         } };
       }
-      async putWrites(config6, writes, taskId) {
-        const threadId = config6.configurable?.thread_id;
-        const checkpointNamespace = config6.configurable?.checkpoint_ns;
-        const checkpointId = config6.configurable?.checkpoint_id;
+      async putWrites(config4, writes, taskId) {
+        const threadId = config4.configurable?.thread_id;
+        const checkpointNamespace = config4.configurable?.checkpoint_ns;
+        const checkpointId = config4.configurable?.checkpoint_id;
         if (threadId === void 0) throw new Error(`Failed to put writes. The passed RunnableConfig is missing a required "thread_id" field in its "configurable" property`);
         if (checkpointId === void 0) throw new Error(`Failed to put writes. The passed RunnableConfig is missing a required "checkpoint_id" field in its "configurable" property.`);
         const outerKey = _generateKey(threadId, checkpointNamespace, checkpointId);
@@ -97898,9 +97898,9 @@ function ensureLangGraphConfig(...configs) {
       empty[k] = copiedValue;
     } else empty[k] = v;
   }
-  for (const config6 of configs) {
-    if (config6 === void 0) continue;
-    for (const [k, v] of Object.entries(config6)) if (v !== void 0 && CONFIG_KEYS.includes(k)) empty[k] = v;
+  for (const config4 of configs) {
+    if (config4 === void 0) continue;
+    for (const [k, v] of Object.entries(config4)) if (v !== void 0 && CONFIG_KEYS.includes(k)) empty[k] = v;
   }
   for (const [key, value] of Object.entries(empty.configurable)) {
     empty.metadata = empty.metadata ?? {};
@@ -97908,21 +97908,21 @@ function ensureLangGraphConfig(...configs) {
   }
   return empty;
 }
-function getStore(config6) {
-  const runConfig = config6 ?? AsyncLocalStorageProviderSingleton2.getRunnableConfig();
+function getStore(config4) {
+  const runConfig = config4 ?? AsyncLocalStorageProviderSingleton2.getRunnableConfig();
   if (runConfig === void 0) throw new Error(["Config not retrievable. This is likely because you are running in an environment without support for AsyncLocalStorage.", "If you're running `getStore` in such environment, pass the `config` from the node function directly."].join("\n"));
   return runConfig?.store;
 }
-function getWriter(config6) {
-  const runConfig = config6 ?? AsyncLocalStorageProviderSingleton2.getRunnableConfig();
+function getWriter(config4) {
+  const runConfig = config4 ?? AsyncLocalStorageProviderSingleton2.getRunnableConfig();
   if (runConfig === void 0) throw new Error(["Config not retrievable. This is likely because you are running in an environment without support for AsyncLocalStorage.", "If you're running `getWriter` in such environment, pass the `config` from the node function directly."].join("\n"));
   return runConfig?.writer || runConfig?.configurable?.writer;
 }
 function getConfig() {
   return AsyncLocalStorageProviderSingleton2.getRunnableConfig();
 }
-function getCurrentTaskInput(config6) {
-  const runConfig = config6 ?? AsyncLocalStorageProviderSingleton2.getRunnableConfig();
+function getCurrentTaskInput(config4) {
+  const runConfig = config4 ?? AsyncLocalStorageProviderSingleton2.getRunnableConfig();
   if (runConfig === void 0) throw new Error(["Config not retrievable. This is likely because you are running in an environment without support for AsyncLocalStorage.", "If you're running `getCurrentTaskInput` in such environment, pass the `config` from the node function directly."].join("\n"));
   if (runConfig.configurable?.["__pregel_scratchpad"]?.currentTaskInput === void 0) throw new Error("BUG: internal scratchpad not initialized.");
   return runConfig.configurable[CONFIG_KEY_SCRATCHPAD].currentTaskInput;
@@ -98238,9 +98238,9 @@ var init_hash3 = __esm({
 
 // node_modules/@langchain/langgraph/dist/interrupt.js
 function interrupt(value) {
-  const config6 = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
-  if (!config6) throw new Error("Called interrupt() outside the context of a graph.");
-  const conf = config6.configurable;
+  const config4 = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
+  if (!config4) throw new Error("Called interrupt() outside the context of a graph.");
+  const conf = config4.configurable;
   if (!conf) throw new Error("No configurable found in config");
   if (!conf["__pregel_checkpointer"]) throw new GraphValueError("No checkpointer set", { lc_error_code: "MISSING_CHECKPOINTER" });
   const scratchpad = conf[CONFIG_KEY_SCRATCHPAD];
@@ -98287,16 +98287,16 @@ function gatherIteratorSync(i) {
   for (const item of i) out.push(item);
   return out;
 }
-function patchConfigurable(config6, patch) {
-  if (!config6) return { configurable: patch };
-  else if (!("configurable" in config6)) return {
-    ...config6,
+function patchConfigurable(config4, patch) {
+  if (!config4) return { configurable: patch };
+  else if (!("configurable" in config4)) return {
+    ...config4,
     configurable: patch
   };
   else return {
-    ...config6,
+    ...config4,
     configurable: {
-      ...config6.configurable,
+      ...config4.configurable,
       ...patch
     }
   };
@@ -98330,9 +98330,9 @@ var init_utils8 = __esm({
         this.trace = fields.trace ?? this.trace;
         this.recurse = fields.recurse ?? this.recurse;
       }
-      async _tracedInvoke(input, config6, runManager) {
+      async _tracedInvoke(input, config4, runManager) {
         return new Promise((resolve, reject) => {
-          const childConfig = patchConfig(config6, { callbacks: runManager?.getChild() });
+          const childConfig = patchConfig(config4, { callbacks: runManager?.getChild() });
           AsyncLocalStorageProviderSingleton2.runWithConfig(childConfig, async () => {
             try {
               resolve(await this.func(input, childConfig));
@@ -98344,8 +98344,8 @@ var init_utils8 = __esm({
       }
       async invoke(input, options) {
         let returnValue;
-        const config6 = ensureLangGraphConfig(options);
-        const mergedConfig = mergeConfigs(this.config, config6);
+        const config4 = ensureLangGraphConfig(options);
+        const mergedConfig = mergeConfigs(this.config, config4);
         if (this.trace) returnValue = await this._callWithConfig(this._tracedInvoke, input, mergedConfig);
         else returnValue = await AsyncLocalStorageProviderSingleton2.runWithConfig(mergedConfig, async () => this.func(input, mergedConfig));
         if (Runnable.isRunnable(returnValue) && this.recurse) return await AsyncLocalStorageProviderSingleton2.runWithConfig(mergedConfig, async () => returnValue.invoke(input, mergedConfig));
@@ -98390,13 +98390,13 @@ var init_write = __esm({
           name,
           tags,
           trace: false,
-          func: async (input, config6) => {
-            return this._write(input, config6 ?? {});
+          func: async (input, config4) => {
+            return this._write(input, config4 ?? {});
           }
         });
         this.writes = writes;
       }
-      async _write(input, config6) {
+      async _write(input, config4) {
         const writes = this.writes.map((write) => {
           if (_isChannelWriteTupleEntry(write) && _isPassthrough(write.value)) return {
             mapper: write.mapper,
@@ -98410,10 +98410,10 @@ var init_write = __esm({
           };
           else return write;
         });
-        await ChannelWrite2.doWrite(config6, writes);
+        await ChannelWrite2.doWrite(config4, writes);
         return input;
       }
-      static async doWrite(config6, writes) {
+      static async doWrite(config4, writes) {
         for (const w of writes) {
           if (_isChannelWriteEntry(w)) {
             if (w.channel === "__pregel_tasks") throw new InvalidUpdateError("Cannot write to the reserved channel TASKS");
@@ -98426,15 +98426,15 @@ var init_write = __esm({
         const writeEntries = [];
         for (const w of writes) if (_isSend(w)) writeEntries.push([TASKS, w]);
         else if (_isChannelWriteTupleEntry(w)) {
-          const mappedResult = await w.mapper.invoke(w.value, config6);
+          const mappedResult = await w.mapper.invoke(w.value, config4);
           if (mappedResult != null && mappedResult.length > 0) writeEntries.push(...mappedResult);
         } else if (_isChannelWriteEntry(w)) {
-          const mappedValue = w.mapper !== void 0 ? await w.mapper.invoke(w.value, config6) : w.value;
+          const mappedValue = w.mapper !== void 0 ? await w.mapper.invoke(w.value, config4) : w.value;
           if (_isSkipWrite(mappedValue)) continue;
           if (w.skipNone && mappedValue === void 0) continue;
           writeEntries.push([w.channel, mappedValue]);
         } else throw new Error(`Invalid write entry: ${JSON.stringify(w)}`);
-        const write = config6.configurable?.[CONFIG_KEY_SEND];
+        const write = config4.configurable?.[CONFIG_KEY_SEND];
         write(writeEntries);
       }
       static isWriter(runnable) {
@@ -98463,15 +98463,15 @@ var init_read = __esm({
       constructor(channel, mapper, fresh = false) {
         super({
           trace: false,
-          func: (_, config6) => ChannelRead2.doRead(config6, this.channel, this.fresh, this.mapper)
+          func: (_, config4) => ChannelRead2.doRead(config4, this.channel, this.fresh, this.mapper)
         });
         this.fresh = fresh;
         this.mapper = mapper;
         this.channel = channel;
         this.name = Array.isArray(channel) ? `ChannelRead<${channel.join(",")}>` : `ChannelRead<${channel}>`;
       }
-      static doRead(config6, channel, fresh, mapper) {
-        const read = config6.configurable?.[CONFIG_KEY_READ];
+      static doRead(config4, channel, fresh, mapper) {
+        const read = config4.configurable?.[CONFIG_KEY_READ];
         if (!read) throw new Error("Runnable is not configured with a read function. Make sure to call in the context of a Pregel process");
         if (mapper) return mapper(read(channel, fresh));
         else return read(channel, fresh);
@@ -98756,27 +98756,27 @@ function getNewChannelVersions(previousVersions, currentVersions) {
 function _coerceToDict3(value, defaultKey) {
   return value && !Array.isArray(value) && !(value instanceof Date) && typeof value === "object" ? value : { [defaultKey]: value };
 }
-function patchConfigurable2(config6, patch) {
-  if (config6 === null) return { configurable: patch };
-  else if (config6?.configurable === void 0) return {
-    ...config6,
+function patchConfigurable2(config4, patch) {
+  if (config4 === null) return { configurable: patch };
+  else if (config4?.configurable === void 0) return {
+    ...config4,
     configurable: patch
   };
   else return {
-    ...config6,
+    ...config4,
     configurable: {
-      ...config6.configurable,
+      ...config4.configurable,
       ...patch
     }
   };
 }
-function patchCheckpointMap(config6, metadata) {
+function patchCheckpointMap(config4, metadata) {
   const parents = metadata?.parents ?? {};
-  if (Object.keys(parents).length > 0) return patchConfigurable2(config6, { [CONFIG_KEY_CHECKPOINT_MAP]: {
+  if (Object.keys(parents).length > 0) return patchConfigurable2(config4, { [CONFIG_KEY_CHECKPOINT_MAP]: {
     ...parents,
-    [config6.configurable?.checkpoint_ns ?? ""]: config6.configurable?.checkpoint_id
+    [config4.configurable?.checkpoint_ns ?? ""]: config4.configurable?.checkpoint_id
   } });
-  else return config6;
+  else return config4;
 }
 function combineAbortSignals(...x) {
   const signals = [...new Set(x.filter(Boolean))];
@@ -98865,8 +98865,8 @@ function getRunnableForFunc(name, func) {
 }
 function getRunnableForEntrypoint(name, func) {
   return new RunnableCallable({
-    func: (input, config6) => {
-      return func(input, config6);
+    func: (input, config4) => {
+      return func(input, config4);
     },
     name,
     trace: false,
@@ -98874,11 +98874,11 @@ function getRunnableForEntrypoint(name, func) {
   });
 }
 function call({ func, name, cache: cache2, retry }, ...args) {
-  const config6 = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
-  if (typeof config6.configurable?.["__pregel_call"] === "function") return config6.configurable[CONFIG_KEY_CALL](func, name, args, {
+  const config4 = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
+  if (typeof config4.configurable?.["__pregel_call"] === "function") return config4.configurable[CONFIG_KEY_CALL](func, name, args, {
     retry,
     cache: cache2,
-    callbacks: config6.callbacks
+    callbacks: config4.callbacks
   });
   throw new Error("Async local storage not initialized. Please call initializeAsyncLocalStorageSingleton() before using this function.");
 }
@@ -99040,25 +99040,25 @@ function* candidateNodes(checkpoint, processes, extra) {
     yield name;
   }
 }
-function _prepareNextTasks(checkpoint, pendingWrites, processes, channels, config6, forExecution, extra) {
+function _prepareNextTasks(checkpoint, pendingWrites, processes, channels, config4, forExecution, extra) {
   const tasks = {};
   const tasksChannel = channels[TASKS];
   if (tasksChannel?.isAvailable()) {
     const len = tasksChannel.get().length;
     for (let i = 0; i < len; i += 1) {
-      const task2 = _prepareSingleTask([PUSH, i], checkpoint, pendingWrites, processes, channels, config6, forExecution, extra);
+      const task2 = _prepareSingleTask([PUSH, i], checkpoint, pendingWrites, processes, channels, config4, forExecution, extra);
       if (task2 !== void 0) tasks[task2.id] = task2;
     }
   }
   for (const name of candidateNodes(checkpoint, processes, extra)) {
-    const task2 = _prepareSingleTask([PULL, name], checkpoint, pendingWrites, processes, channels, config6, forExecution, extra);
+    const task2 = _prepareSingleTask([PULL, name], checkpoint, pendingWrites, processes, channels, config4, forExecution, extra);
     if (task2 !== void 0) tasks[task2.id] = task2;
   }
   return tasks;
 }
-function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, channels, config6, forExecution, extra) {
+function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, channels, config4, forExecution, extra) {
   const { step, checkpointer, manager } = extra;
-  const configurable = config6.configurable ?? {};
+  const configurable = config4.configurable ?? {};
   const parentNamespace = configurable.checkpoint_ns ?? "";
   if (taskPath[0] === "__pregel_push" && isCall(taskPath[taskPath.length - 1])) {
     const call3 = taskPath[taskPath.length - 1];
@@ -99089,9 +99089,9 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
         input: call3.input,
         proc,
         writes,
-        config: patchConfig(mergeConfigs(config6, {
+        config: patchConfig(mergeConfigs(config4, {
           metadata,
-          store: extra.store ?? config6.store
+          store: extra.store ?? config4.store
         }), {
           runName: call3.name,
           callbacks: manager?.getChild(`graph:step:${step}`),
@@ -99113,7 +99113,7 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
               pendingWrites: pendingWrites ?? [],
               taskId: id,
               currentTaskInput: call3.input,
-              resumeMap: config6.configurable?.[CONFIG_KEY_RESUME_MAP],
+              resumeMap: config4.configurable?.[CONFIG_KEY_RESUME_MAP],
               namespaceHash: XXH3(taskCheckpointNamespace)
             }),
             [CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[PREVIOUS],
@@ -99184,10 +99184,10 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
           proc: node,
           subgraphs: proc.subgraphs,
           writes,
-          config: patchConfig(mergeConfigs(config6, {
+          config: patchConfig(mergeConfigs(config4, {
             metadata,
             tags: proc.tags,
-            store: extra.store ?? config6.store
+            store: extra.store ?? config4.store
           }), {
             runName: packet.node,
             callbacks: manager?.getChild(`graph:step:${step}`),
@@ -99209,7 +99209,7 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
                 pendingWrites: pendingWrites ?? [],
                 taskId,
                 currentTaskInput: packet.args,
-                resumeMap: config6.configurable?.[CONFIG_KEY_RESUME_MAP],
+                resumeMap: config4.configurable?.[CONFIG_KEY_RESUME_MAP],
                 namespaceHash: XXH3(taskCheckpointNamespace)
               }),
               [CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[PREVIOUS],
@@ -99294,10 +99294,10 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
             proc: node,
             subgraphs: proc.subgraphs,
             writes,
-            config: patchConfig(mergeConfigs(config6, {
+            config: patchConfig(mergeConfigs(config4, {
               metadata,
               tags: proc.tags,
-              store: extra.store ?? config6.store
+              store: extra.store ?? config4.store
             }), {
               runName: name,
               callbacks: manager?.getChild(`graph:step:${step}`),
@@ -99321,7 +99321,7 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
                   pendingWrites: pendingWrites ?? [],
                   taskId,
                   currentTaskInput: val,
-                  resumeMap: config6.configurable?.[CONFIG_KEY_RESUME_MAP],
+                  resumeMap: config4.configurable?.[CONFIG_KEY_RESUME_MAP],
                   namespaceHash: XXH3(taskCheckpointNamespace)
                 }),
                 [CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[PREVIOUS],
@@ -99449,8 +99449,8 @@ var init_algo = __esm({
 
 // node_modules/@langchain/langgraph/dist/pregel/debug.js
 function* mapDebugTasks(tasks) {
-  for (const { id, name, input, config: config6, triggers, writes } of tasks) {
-    if (config6?.tags?.includes("langsmith:hidden")) continue;
+  for (const { id, name, input, config: config4, triggers, writes } of tasks) {
+    if (config4?.tags?.includes("langsmith:hidden")) continue;
     yield {
       id,
       name,
@@ -99481,8 +99481,8 @@ function mapTaskResultWrites(writes) {
   return result;
 }
 function* mapDebugTaskResults(tasks, streamChannels) {
-  for (const [{ id, name, config: config6 }, writes] of tasks) {
-    if (config6?.tags?.includes("langsmith:hidden")) continue;
+  for (const [{ id, name, config: config4 }, writes] of tasks) {
+    if (config4?.tags?.includes("langsmith:hidden")) continue;
     yield {
       id,
       name,
@@ -99493,32 +99493,32 @@ function* mapDebugTaskResults(tasks, streamChannels) {
     };
   }
 }
-function* mapDebugCheckpoint(config6, channels, streamChannels, metadata, tasks, pendingWrites, parentConfig, outputKeys) {
-  function formatConfig(config7) {
+function* mapDebugCheckpoint(config4, channels, streamChannels, metadata, tasks, pendingWrites, parentConfig, outputKeys) {
+  function formatConfig(config5) {
     const pyConfig = {};
-    if (config7.callbacks != null) pyConfig.callbacks = config7.callbacks;
-    if (config7.configurable != null) pyConfig.configurable = config7.configurable;
-    if (config7.maxConcurrency != null) pyConfig.max_concurrency = config7.maxConcurrency;
-    if (config7.metadata != null) pyConfig.metadata = config7.metadata;
-    if (config7.recursionLimit != null) pyConfig.recursion_limit = config7.recursionLimit;
-    if (config7.runId != null) pyConfig.run_id = config7.runId;
-    if (config7.runName != null) pyConfig.run_name = config7.runName;
-    if (config7.tags != null) pyConfig.tags = config7.tags;
+    if (config5.callbacks != null) pyConfig.callbacks = config5.callbacks;
+    if (config5.configurable != null) pyConfig.configurable = config5.configurable;
+    if (config5.maxConcurrency != null) pyConfig.max_concurrency = config5.maxConcurrency;
+    if (config5.metadata != null) pyConfig.metadata = config5.metadata;
+    if (config5.recursionLimit != null) pyConfig.recursion_limit = config5.recursionLimit;
+    if (config5.runId != null) pyConfig.run_id = config5.runId;
+    if (config5.runName != null) pyConfig.run_name = config5.runName;
+    if (config5.tags != null) pyConfig.tags = config5.tags;
     return pyConfig;
   }
-  const parentNs = config6.configurable?.checkpoint_ns;
+  const parentNs = config4.configurable?.checkpoint_ns;
   const taskStates = {};
   for (const task2 of tasks) {
     if (!(task2.subgraphs?.length ? task2.subgraphs : [task2.proc]).find(findSubgraphPregel)) continue;
     let taskNs = `${task2.name}:${task2.id}`;
     if (parentNs) taskNs = `${parentNs}|${taskNs}`;
     taskStates[task2.id] = { configurable: {
-      thread_id: config6.configurable?.thread_id,
+      thread_id: config4.configurable?.thread_id,
       checkpoint_ns: taskNs
     } };
   }
   yield {
-    config: formatConfig(config6),
+    config: formatConfig(config4),
     values: readChannels(channels, streamChannels),
     metadata,
     next: tasks.map((task2) => task2.name),
@@ -99638,30 +99638,30 @@ function _serializeError(error48) {
     message: JSON.stringify(error48)
   };
 }
-function _isRunnableConfig(config6) {
-  if (typeof config6 !== "object" || config6 == null) return false;
-  return "configurable" in config6 && typeof config6.configurable === "object" && config6.configurable != null;
+function _isRunnableConfig(config4) {
+  if (typeof config4 !== "object" || config4 == null) return false;
+  return "configurable" in config4 && typeof config4.configurable === "object" && config4.configurable != null;
 }
-function _extractCheckpointFromConfig(config6) {
-  if (!_isRunnableConfig(config6) || !config6.configurable.thread_id) return null;
+function _extractCheckpointFromConfig(config4) {
+  if (!_isRunnableConfig(config4) || !config4.configurable.thread_id) return null;
   return {
-    thread_id: config6.configurable.thread_id,
-    checkpoint_ns: config6.configurable.checkpoint_ns || "",
-    checkpoint_id: config6.configurable.checkpoint_id || null,
-    checkpoint_map: config6.configurable.checkpoint_map || null
+    thread_id: config4.configurable.thread_id,
+    checkpoint_ns: config4.configurable.checkpoint_ns || "",
+    checkpoint_id: config4.configurable.checkpoint_id || null,
+    checkpoint_map: config4.configurable.checkpoint_map || null
   };
 }
-function _serializeConfig(config6) {
-  if (_isRunnableConfig(config6)) {
-    const configurable = Object.fromEntries(Object.entries(config6.configurable).filter(([key]) => !key.startsWith("__")));
+function _serializeConfig(config4) {
+  if (_isRunnableConfig(config4)) {
+    const configurable = Object.fromEntries(Object.entries(config4.configurable).filter(([key]) => !key.startsWith("__")));
     const newConfig = {
-      ...config6,
+      ...config4,
       configurable
     };
     delete newConfig.callbacks;
     return newConfig;
   }
-  return config6;
+  return config4;
 }
 function _serializeCheckpoint(payload) {
   const result = {
@@ -100038,24 +100038,24 @@ var init_loop = __esm({
         this.triggerToNodes = params.triggerToNodes;
       }
       static async initialize(params) {
-        let { config: config6, stream: stream4 } = params;
-        if (stream4 !== void 0 && config6.configurable?.["__pregel_stream"] !== void 0) stream4 = createDuplexStream(stream4, config6.configurable[CONFIG_KEY_STREAM]);
-        const skipDoneTasks = config6.configurable ? !("checkpoint_id" in config6.configurable) : true;
-        const scratchpad = config6.configurable?.[CONFIG_KEY_SCRATCHPAD];
-        if (config6.configurable && scratchpad) {
-          if (scratchpad.subgraphCounter > 0) config6 = patchConfigurable2(config6, { [CONFIG_KEY_CHECKPOINT_NS]: [config6.configurable[CONFIG_KEY_CHECKPOINT_NS], scratchpad.subgraphCounter.toString()].join("|") });
+        let { config: config4, stream: stream4 } = params;
+        if (stream4 !== void 0 && config4.configurable?.["__pregel_stream"] !== void 0) stream4 = createDuplexStream(stream4, config4.configurable[CONFIG_KEY_STREAM]);
+        const skipDoneTasks = config4.configurable ? !("checkpoint_id" in config4.configurable) : true;
+        const scratchpad = config4.configurable?.[CONFIG_KEY_SCRATCHPAD];
+        if (config4.configurable && scratchpad) {
+          if (scratchpad.subgraphCounter > 0) config4 = patchConfigurable2(config4, { [CONFIG_KEY_CHECKPOINT_NS]: [config4.configurable[CONFIG_KEY_CHECKPOINT_NS], scratchpad.subgraphCounter.toString()].join("|") });
           scratchpad.subgraphCounter += 1;
         }
-        const isNested = CONFIG_KEY_READ in (config6.configurable ?? {});
-        if (!isNested && config6.configurable?.checkpoint_ns !== void 0 && config6.configurable?.checkpoint_ns !== "") config6 = patchConfigurable2(config6, {
+        const isNested = CONFIG_KEY_READ in (config4.configurable ?? {});
+        if (!isNested && config4.configurable?.checkpoint_ns !== void 0 && config4.configurable?.checkpoint_ns !== "") config4 = patchConfigurable2(config4, {
           checkpoint_ns: "",
           checkpoint_id: void 0
         });
-        let checkpointConfig = config6;
-        if (config6.configurable?.["checkpoint_map"] !== void 0 && config6.configurable?.["checkpoint_map"]?.[config6.configurable?.checkpoint_ns]) checkpointConfig = patchConfigurable2(config6, { checkpoint_id: config6.configurable[CONFIG_KEY_CHECKPOINT_MAP][config6.configurable?.checkpoint_ns] });
-        const checkpointNamespace = config6.configurable?.checkpoint_ns?.split("|") ?? [];
+        let checkpointConfig = config4;
+        if (config4.configurable?.["checkpoint_map"] !== void 0 && config4.configurable?.["checkpoint_map"]?.[config4.configurable?.checkpoint_ns]) checkpointConfig = patchConfigurable2(config4, { checkpoint_id: config4.configurable[CONFIG_KEY_CHECKPOINT_MAP][config4.configurable?.checkpoint_ns] });
+        const checkpointNamespace = config4.configurable?.checkpoint_ns?.split("|") ?? [];
         const saved = await params.checkpointer?.getTuple(checkpointConfig) ?? {
-          config: config6,
+          config: config4,
           checkpoint: emptyCheckpoint(),
           metadata: {
             source: "input",
@@ -100065,11 +100065,11 @@ var init_loop = __esm({
           pendingWrites: []
         };
         checkpointConfig = {
-          ...config6,
+          ...config4,
           ...saved.config,
           configurable: {
             checkpoint_ns: "",
-            ...config6.configurable,
+            ...config4.configurable,
             ...saved.config.configurable
           }
         };
@@ -100079,13 +100079,13 @@ var init_loop = __esm({
         const checkpointPendingWrites = saved.pendingWrites ?? [];
         const channels = emptyChannels(params.channelSpecs, checkpoint);
         const step = (checkpointMetadata.step ?? 0) + 1;
-        const stop = step + (config6.recursionLimit ?? DEFAULT_LOOP_LIMIT) + 1;
+        const stop = step + (config4.recursionLimit ?? DEFAULT_LOOP_LIMIT) + 1;
         const checkpointPreviousVersions = { ...checkpoint.channel_versions };
         const store = params.store ? new AsyncBatchedStore(params.store) : void 0;
         if (store) await store.start();
         return new PregelLoop2({
           input: params.input,
-          config: config6,
+          config: config4,
           checkpointer: params.checkpointer,
           checkpoint,
           checkpointMetadata,
@@ -100149,11 +100149,11 @@ var init_loop = __esm({
           c,
           v
         ]);
-        const config6 = patchConfigurable2(this.checkpointConfig, {
+        const config4 = patchConfigurable2(this.checkpointConfig, {
           [CONFIG_KEY_CHECKPOINT_NS]: this.config.configurable?.checkpoint_ns ?? "",
           [CONFIG_KEY_CHECKPOINT_ID]: this.checkpoint.id
         });
-        if (this.durability !== "exit" && this.checkpointer != null) this._trackCheckpointerPromise(this.checkpointer.putWrites(config6, writesToSave, taskId));
+        if (this.durability !== "exit" && this.checkpointer != null) this._trackCheckpointerPromise(this.checkpointer.putWrites(config4, writesToSave, taskId));
         if (this.tasks) this._outputWrites(taskId, writesCopy);
         if (!writes.length || !this.cache || !this.tasks) return;
         const task2 = this.tasks[taskId];
@@ -100440,7 +100440,7 @@ var init_loop = __esm({
       _flushPendingWrites() {
         if (this.checkpointer == null) return;
         if (this.checkpointPendingWrites.length === 0) return;
-        const config6 = patchConfigurable2(this.checkpointConfig, {
+        const config4 = patchConfigurable2(this.checkpointConfig, {
           [CONFIG_KEY_CHECKPOINT_NS]: this.config.configurable?.checkpoint_ns ?? "",
           [CONFIG_KEY_CHECKPOINT_ID]: this.checkpoint.id
         });
@@ -100449,7 +100449,7 @@ var init_loop = __esm({
           byTask[tid] ??= [];
           byTask[tid].push([key, value]);
         }
-        for (const [tid, ws] of Object.entries(byTask)) this._trackCheckpointerPromise(this.checkpointer.putWrites(config6, ws, tid));
+        for (const [tid, ws] of Object.entries(byTask)) this._trackCheckpointerPromise(this.checkpointer.putWrites(config4, ws, tid));
       }
       _matchWrites(tasks) {
         for (const [tid, k, v] of this.checkpointPendingWrites) {
@@ -100574,10 +100574,10 @@ async function _runWithRetry(pregelTask, retryPolicy, configurable, signal) {
   let attempts = 0;
   let error48;
   let result;
-  let { config: config6 } = pregelTask;
-  if (configurable) config6 = patchConfigurable2(config6, configurable);
-  config6 = {
-    ...config6,
+  let { config: config4 } = pregelTask;
+  if (configurable) config4 = patchConfigurable2(config4, configurable);
+  config4 = {
+    ...config4,
     signal
   };
   while (true) {
@@ -100585,16 +100585,16 @@ async function _runWithRetry(pregelTask, retryPolicy, configurable, signal) {
     pregelTask.writes.splice(0, pregelTask.writes.length);
     error48 = void 0;
     try {
-      result = await pregelTask.proc.invoke(pregelTask.input, config6);
+      result = await pregelTask.proc.invoke(pregelTask.input, config4);
       break;
     } catch (e) {
       error48 = e;
       error48.pregelTaskId = pregelTask.id;
       if (isParentCommand(error48)) {
-        const ns3 = config6?.configurable?.checkpoint_ns;
+        const ns3 = config4?.configurable?.checkpoint_ns;
         const cmd = error48.command;
         if (cmd.graph === ns3) {
-          for (const writer2 of pregelTask.writers) await writer2.invoke(cmd, config6);
+          for (const writer2 of pregelTask.writers) await writer2.invoke(cmd, config4);
           error48 = void 0;
           break;
         } else if (cmd.graph === Command.PARENT) {
@@ -100615,7 +100615,7 @@ async function _runWithRetry(pregelTask, retryPolicy, configurable, signal) {
       await new Promise((resolve) => setTimeout(resolve, intervalWithJitter));
       const errorName = error48.name ?? error48.constructor.unminifiable_name ?? error48.constructor.name;
       if (resolvedRetryPolicy?.logWarning ?? true) console.log(`Retrying task "${String(pregelTask.name)}" after ${interval.toFixed(2)}ms (attempt ${attempts}) after ${errorName}: ${error48}`);
-      config6 = patchConfigurable2(config6, { [CONFIG_KEY_RESUMING]: true });
+      config4 = patchConfigurable2(config4, { [CONFIG_KEY_RESUMING]: true });
     }
   }
   return {
@@ -101227,8 +101227,8 @@ var init_pregel = __esm({
       * @param config - The configuration to merge with the current configuration
       * @returns A new Pregel instance with the merged configuration
       */
-      withConfig(config6) {
-        const mergedConfig = mergeConfigs(this.config, config6);
+      withConfig(config4) {
+        const mergedConfig = mergeConfigs(this.config, config4);
         return new this.constructor({
           ...this,
           config: mergedConfig
@@ -101290,8 +101290,8 @@ var init_pregel = __esm({
       * @param config - Configuration for generating the graph visualization
       * @returns A representation of the graph that can be visualized
       */
-      async getGraphAsync(config6) {
-        return this.getGraph(config6);
+      async getGraphAsync(config4) {
+        return this.getGraph(config4);
       }
       /**
       * Gets all subgraphs within this graph.
@@ -101347,11 +101347,11 @@ var init_pregel = __esm({
       * @returns A snapshot of the graph state
       * @internal
       */
-      async _prepareStateSnapshot({ config: config6, saved, subgraphCheckpointer, applyPendingWrites = false }) {
+      async _prepareStateSnapshot({ config: config4, saved, subgraphCheckpointer, applyPendingWrites = false }) {
         if (saved === void 0) return {
           values: {},
           next: [],
-          config: config6,
+          config: config4,
           tasks: []
         };
         const channels = emptyChannels(this.channels, saved.checkpoint);
@@ -101376,11 +101376,11 @@ var init_pregel = __esm({
           let taskNs = `${String(task2.name)}:${task2.id}`;
           if (parentNamespace) taskNs = `${parentNamespace}|${taskNs}`;
           if (subgraphCheckpointer === void 0) {
-            const config7 = { configurable: {
+            const config5 = { configurable: {
               thread_id: saved.config.configurable?.thread_id,
               checkpoint_ns: taskNs
             } };
-            taskStates[task2.id] = config7;
+            taskStates[task2.id] = config5;
           } else {
             const subgraphConfig = { configurable: {
               [CONFIG_KEY_CHECKPOINTER]: subgraphCheckpointer,
@@ -101430,21 +101430,21 @@ var init_pregel = __esm({
       * @returns A snapshot of the current graph state
       * @throws {GraphValueError} If no checkpointer is configured
       */
-      async getState(config6, options) {
-        const checkpointer = config6.configurable?.["__pregel_checkpointer"] ?? this.checkpointer;
+      async getState(config4, options) {
+        const checkpointer = config4.configurable?.["__pregel_checkpointer"] ?? this.checkpointer;
         if (!checkpointer) throw new GraphValueError("No checkpointer set", { lc_error_code: "MISSING_CHECKPOINTER" });
-        const checkpointNamespace = config6.configurable?.checkpoint_ns ?? "";
-        if (checkpointNamespace !== "" && config6.configurable?.["__pregel_checkpointer"] === void 0) {
+        const checkpointNamespace = config4.configurable?.checkpoint_ns ?? "";
+        if (checkpointNamespace !== "" && config4.configurable?.["__pregel_checkpointer"] === void 0) {
           const recastNamespace = recastCheckpointNamespace(checkpointNamespace);
-          for await (const [name, subgraph] of this.getSubgraphsAsync(recastNamespace, true)) if (name === recastNamespace) return await subgraph.getState(patchConfigurable(config6, { [CONFIG_KEY_CHECKPOINTER]: checkpointer }), { subgraphs: options?.subgraphs });
+          for await (const [name, subgraph] of this.getSubgraphsAsync(recastNamespace, true)) if (name === recastNamespace) return await subgraph.getState(patchConfigurable(config4, { [CONFIG_KEY_CHECKPOINTER]: checkpointer }), { subgraphs: options?.subgraphs });
         }
-        const mergedConfig = mergeConfigs(this.config, config6);
-        const saved = await checkpointer.getTuple(config6);
+        const mergedConfig = mergeConfigs(this.config, config4);
+        const saved = await checkpointer.getTuple(config4);
         return await this._prepareStateSnapshot({
           config: mergedConfig,
           saved,
           subgraphCheckpointer: options?.subgraphs ? checkpointer : void 0,
-          applyPendingWrites: !config6.configurable?.checkpoint_id
+          applyPendingWrites: !config4.configurable?.checkpoint_id
         });
       }
       /**
@@ -101460,18 +101460,18 @@ var init_pregel = __esm({
       * @returns An async iterator of state snapshots
       * @throws {Error} If no checkpointer is configured
       */
-      async *getStateHistory(config6, options) {
-        const checkpointer = config6.configurable?.["__pregel_checkpointer"] ?? this.checkpointer;
+      async *getStateHistory(config4, options) {
+        const checkpointer = config4.configurable?.["__pregel_checkpointer"] ?? this.checkpointer;
         if (!checkpointer) throw new GraphValueError("No checkpointer set", { lc_error_code: "MISSING_CHECKPOINTER" });
-        const checkpointNamespace = config6.configurable?.checkpoint_ns ?? "";
-        if (checkpointNamespace !== "" && config6.configurable?.["__pregel_checkpointer"] === void 0) {
+        const checkpointNamespace = config4.configurable?.checkpoint_ns ?? "";
+        if (checkpointNamespace !== "" && config4.configurable?.["__pregel_checkpointer"] === void 0) {
           const recastNamespace = recastCheckpointNamespace(checkpointNamespace);
           for await (const [name, pregel] of this.getSubgraphsAsync(recastNamespace, true)) if (name === recastNamespace) {
-            yield* pregel.getStateHistory(patchConfigurable(config6, { [CONFIG_KEY_CHECKPOINTER]: checkpointer }), options);
+            yield* pregel.getStateHistory(patchConfigurable(config4, { [CONFIG_KEY_CHECKPOINTER]: checkpointer }), options);
             return;
           }
         }
-        const mergedConfig = mergeConfigs(this.config, config6, { configurable: { checkpoint_ns: checkpointNamespace } });
+        const mergedConfig = mergeConfigs(this.config, config4, { configurable: { checkpoint_ns: checkpointNamespace } });
         for await (const checkpointTuple of checkpointer.list(mergedConfig, options)) yield this._prepareStateSnapshot({
           config: checkpointTuple.config,
           saved: checkpointTuple
@@ -101505,15 +101505,15 @@ var init_pregel = __esm({
           throw new Error(`Subgraph "${recastNamespace}" not found`);
         }
         const updateSuperStep = async (inputConfig, updates) => {
-          const config6 = this.config ? mergeConfigs(this.config, inputConfig) : inputConfig;
-          const saved = await checkpointer.getTuple(config6);
+          const config4 = this.config ? mergeConfigs(this.config, inputConfig) : inputConfig;
+          const saved = await checkpointer.getTuple(config4);
           const checkpoint = saved !== void 0 ? copyCheckpoint(saved.checkpoint) : emptyCheckpoint();
           const checkpointPreviousVersions = { ...saved?.checkpoint.channel_versions };
           const step = saved?.metadata?.step ?? -1;
-          let checkpointConfig = patchConfigurable(config6, { checkpoint_ns: config6.configurable?.checkpoint_ns ?? "" });
-          let checkpointMetadata = config6.metadata ?? {};
+          let checkpointConfig = patchConfigurable(config4, { checkpoint_ns: config4.configurable?.checkpoint_ns ?? "" });
+          let checkpointMetadata = config4.metadata ?? {};
           if (saved?.config.configurable) {
-            checkpointConfig = patchConfigurable(config6, saved.config.configurable);
+            checkpointConfig = patchConfigurable(config4, saved.config.configurable);
             checkpointMetadata = {
               ...saved.metadata,
               ...checkpointMetadata
@@ -101616,7 +101616,7 @@ var init_pregel = __esm({
             await checkpointer.putWrites(nextConfig2, inputWrites, uuid5(INPUT, checkpoint.id));
             return patchCheckpointMap(nextConfig2, saved ? saved.metadata : void 0);
           }
-          if (config6.configurable?.checkpoint_id === void 0 && saved?.pendingWrites !== void 0 && saved.pendingWrites.length > 0) {
+          if (config4.configurable?.checkpoint_id === void 0 && saved?.pendingWrites !== void 0 && saved.pendingWrites.length > 0) {
             const nextTasks = _prepareNextTasks(checkpoint, saved.pendingWrites, this.nodes, channels, saved.config, true, {
               store: this.store,
               checkpointer: this.checkpointer,
@@ -101691,10 +101691,10 @@ var init_pregel = __esm({
             });
           }
           for (const task2 of tasks) await task2.proc.invoke(task2.input, patchConfig({
-            ...config6,
-            store: config6?.store ?? this.store
+            ...config4,
+            store: config4?.store ?? this.store
           }, {
-            runName: config6.runName ?? `${this.getName()}UpdateState`,
+            runName: config4.runName ?? `${this.getName()}UpdateState`,
             configurable: {
               [CONFIG_KEY_SEND]: (items) => task2.writes.push(...items),
               [CONFIG_KEY_READ]: (select_, fresh_ = false) => _localRead(checkpoint, channels, task2, select_, fresh_)
@@ -101763,8 +101763,8 @@ var init_pregel = __esm({
       * - whether checkpoint during is enabled
       * @internal
       */
-      _defaults(config6) {
-        const { debug: debug2, streamMode, inputKeys, outputKeys, interruptAfter, interruptBefore, ...rest } = config6;
+      _defaults(config4) {
+        const { debug: debug2, streamMode, inputKeys, outputKeys, interruptAfter, interruptBefore, ...rest } = config4;
         let streamModeSingle = true;
         const defaultDebug = debug2 !== void 0 ? debug2 : this.debug;
         let defaultOutputKeys = outputKeys;
@@ -101780,24 +101780,24 @@ var init_pregel = __esm({
           defaultStreamMode = Array.isArray(streamMode) ? streamMode : [streamMode];
           streamModeSingle = typeof streamMode === "string";
         } else {
-          if (config6.configurable?.["__pregel_task_id"] !== void 0) defaultStreamMode = ["values"];
+          if (config4.configurable?.["__pregel_task_id"] !== void 0) defaultStreamMode = ["values"];
           else defaultStreamMode = this.streamMode;
           streamModeSingle = true;
         }
         let defaultCheckpointer;
         if (this.checkpointer === false) defaultCheckpointer = void 0;
-        else if (config6 !== void 0 && config6.configurable?.["__pregel_checkpointer"] !== void 0) defaultCheckpointer = config6.configurable[CONFIG_KEY_CHECKPOINTER];
+        else if (config4 !== void 0 && config4.configurable?.["__pregel_checkpointer"] !== void 0) defaultCheckpointer = config4.configurable[CONFIG_KEY_CHECKPOINTER];
         else if (this.checkpointer === true) throw new Error("checkpointer: true cannot be used for root graphs.");
         else defaultCheckpointer = this.checkpointer;
-        const defaultStore = config6.store ?? this.store;
-        const defaultCache = config6.cache ?? this.cache;
-        if (config6.durability != null && config6.checkpointDuring != null) throw new Error("Cannot use both `durability` and `checkpointDuring` at the same time.");
+        const defaultStore = config4.store ?? this.store;
+        const defaultCache = config4.cache ?? this.cache;
+        if (config4.durability != null && config4.checkpointDuring != null) throw new Error("Cannot use both `durability` and `checkpointDuring` at the same time.");
         const checkpointDuringDurability = (() => {
-          if (config6.checkpointDuring == null) return void 0;
-          if (config6.checkpointDuring === false) return "exit";
+          if (config4.checkpointDuring == null) return void 0;
+          if (config4.checkpointDuring === false) return "exit";
           return "async";
         })();
-        const defaultDurability = config6.durability ?? checkpointDuringDurability ?? config6?.configurable?.["__pregel_durability"] ?? "async";
+        const defaultDurability = config4.durability ?? checkpointDuringDurability ?? config4?.configurable?.["__pregel_durability"] ?? "async";
         return [
           defaultDebug,
           defaultStreamMode,
@@ -101832,23 +101832,23 @@ var init_pregel = __esm({
       */
       async stream(input, options) {
         const abortController = new AbortController();
-        const config6 = {
+        const config4 = {
           recursionLimit: this.config?.recursionLimit,
           ...options,
           signal: combineAbortSignals(options?.signal, abortController.signal).signal
         };
-        const stream4 = await super.stream(input, config6);
+        const stream4 = await super.stream(input, config4);
         return new IterableReadableStreamWithAbortSignal(options?.encoding === "text/event-stream" ? toEventStream(stream4) : stream4, abortController);
       }
       streamEvents(input, options, streamOptions) {
         const abortController = new AbortController();
-        const config6 = {
+        const config4 = {
           recursionLimit: this.config?.recursionLimit,
           ...options,
           callbacks: combineCallbacks(this.config?.callbacks, options?.callbacks),
           signal: combineAbortSignals(options?.signal, abortController.signal).signal
         };
-        return new IterableReadableStreamWithAbortSignal(super.streamEvents(input, config6, streamOptions), abortController);
+        return new IterableReadableStreamWithAbortSignal(super.streamEvents(input, config4, streamOptions), abortController);
       }
       /**
       * Validates the input for the graph.
@@ -101885,42 +101885,42 @@ var init_pregel = __esm({
         if (this.checkpointer !== void 0 && this.checkpointer !== false && inputConfig.configurable === void 0) throw new Error(`Checkpointer requires one or more of the following "configurable" keys: "thread_id", "checkpoint_ns", "checkpoint_id"`);
         const validInput = await this._validateInput(input);
         const { runId, ...restConfig } = inputConfig;
-        const [debug2, streamMode, , outputKeys, config6, interruptBefore, interruptAfter, checkpointer, store, streamModeSingle, cache2, durability] = this._defaults(restConfig);
-        config6.metadata = {
+        const [debug2, streamMode, , outputKeys, config4, interruptBefore, interruptAfter, checkpointer, store, streamModeSingle, cache2, durability] = this._defaults(restConfig);
+        config4.metadata = {
           ls_integration: "langgraph",
-          ...config6.metadata
+          ...config4.metadata
         };
-        if (typeof config6.context !== "undefined") config6.context = await this._validateContext(config6.context);
-        else config6.configurable = await this._validateContext(config6.configurable);
+        if (typeof config4.context !== "undefined") config4.context = await this._validateContext(config4.context);
+        else config4.configurable = await this._validateContext(config4.configurable);
         const stream4 = new IterableReadableWritableStream({ modes: new Set(streamMode) });
         if (this.checkpointer === true) {
-          config6.configurable ??= {};
-          const ns3 = config6.configurable["checkpoint_ns"] ?? "";
-          config6.configurable[CONFIG_KEY_CHECKPOINT_NS] = ns3.split("|").map((part) => part.split(":")[0]).join("|");
+          config4.configurable ??= {};
+          const ns3 = config4.configurable["checkpoint_ns"] ?? "";
+          config4.configurable[CONFIG_KEY_CHECKPOINT_NS] = ns3.split("|").map((part) => part.split(":")[0]).join("|");
         }
         if (streamMode.includes("messages")) {
           const messageStreamer = new StreamMessagesHandler((chunk) => stream4.push(chunk));
-          const { callbacks } = config6;
-          if (callbacks === void 0) config6.callbacks = [messageStreamer];
-          else if (Array.isArray(callbacks)) config6.callbacks = callbacks.concat(messageStreamer);
+          const { callbacks } = config4;
+          if (callbacks === void 0) config4.callbacks = [messageStreamer];
+          else if (Array.isArray(callbacks)) config4.callbacks = callbacks.concat(messageStreamer);
           else {
             const copiedCallbacks = callbacks.copy();
             copiedCallbacks.addHandler(messageStreamer, true);
-            config6.callbacks = copiedCallbacks;
+            config4.callbacks = copiedCallbacks;
           }
         }
         if (streamMode.includes("tools")) {
           const toolStreamer = new StreamToolsHandler((chunk) => stream4.push(chunk));
-          const { callbacks } = config6;
-          if (callbacks === void 0) config6.callbacks = [toolStreamer];
-          else if (Array.isArray(callbacks)) config6.callbacks = callbacks.concat(toolStreamer);
+          const { callbacks } = config4;
+          if (callbacks === void 0) config4.callbacks = [toolStreamer];
+          else if (Array.isArray(callbacks)) config4.callbacks = callbacks.concat(toolStreamer);
           else {
             const copiedCallbacks = callbacks.copy();
             copiedCallbacks.addHandler(toolStreamer, true);
-            config6.callbacks = copiedCallbacks;
+            config4.callbacks = copiedCallbacks;
           }
         }
-        config6.writer ??= (chunk) => {
+        config4.writer ??= (chunk) => {
           if (!streamMode.includes("custom")) return;
           const ns3 = getConfig()?.configurable?.[CONFIG_KEY_CHECKPOINT_NS]?.split("|").slice(0, -1);
           stream4.push([
@@ -101929,8 +101929,8 @@ var init_pregel = __esm({
             chunk
           ]);
         };
-        config6.interrupt ??= this.userInterrupt ?? interrupt;
-        const runManager = await (await getCallbackManagerForConfig(config6))?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), runId, void 0, void 0, void 0, config6?.runName ?? this.getName());
+        config4.interrupt ??= this.userInterrupt ?? interrupt;
+        const runManager = await (await getCallbackManagerForConfig(config4))?.handleChainStart(this.toJSON(), _coerceToDict3(input, "input"), runId, void 0, void 0, void 0, config4?.runName ?? this.getName());
         const channelSpecs = getOnlyChannels(this.channels);
         let loop;
         let loopError;
@@ -101938,7 +101938,7 @@ var init_pregel = __esm({
           try {
             loop = await PregelLoop.initialize({
               input: validInput,
-              config: config6,
+              config: config4,
               checkpointer,
               nodes: this.nodes,
               channelSpecs,
@@ -101956,7 +101956,7 @@ var init_pregel = __esm({
             });
             const runner = new PregelRunner({
               loop,
-              nodeFinished: config6.configurable?.[CONFIG_KEY_NODE_FINISHED]
+              nodeFinished: config4.configurable?.[CONFIG_KEY_NODE_FINISHED]
             });
             if (options?.subgraphs) loop.config.configurable = {
               ...loop.config.configurable,
@@ -101966,7 +101966,7 @@ var init_pregel = __esm({
               loop,
               runner,
               debug: debug2,
-              config: config6
+              config: config4
             });
             if (durability === "sync") await Promise.all(loop?.checkpointerPromises ?? []);
           } catch (e) {
@@ -102029,14 +102029,14 @@ var init_pregel = __esm({
       */
       async invoke(input, options) {
         const streamMode = options?.streamMode ?? "values";
-        const config6 = {
+        const config4 = {
           ...options,
           outputKeys: options?.outputKeys ?? this.outputChannels,
           streamMode,
           encoding: void 0
         };
         const chunks = [];
-        const stream4 = await this.stream(input, config6);
+        const stream4 = await this.stream(input, config4);
         const interruptChunks = [];
         let latest;
         for await (const chunk of stream4) if (streamMode === "values") if (isInterrupted(chunk)) interruptChunks.push(chunk[INTERRUPT]);
@@ -102056,7 +102056,7 @@ var init_pregel = __esm({
         return chunks;
       }
       async _runLoop(params) {
-        const { loop, runner, debug: debug2, config: config6 } = params;
+        const { loop, runner, debug: debug2, config: config4 } = params;
         let tickError;
         try {
           while (await loop.tick({ inputKeys: this.inputChannels })) {
@@ -102069,12 +102069,12 @@ var init_pregel = __esm({
               onStepWrite: (step, writes) => {
                 if (debug2) printStepWrites(step, writes, this.streamChannelsList);
               },
-              maxConcurrency: config6.maxConcurrency,
-              signal: config6.signal
+              maxConcurrency: config4.maxConcurrency,
+              signal: config4.signal
             });
           }
           if (loop.status === "out_of_steps") throw new GraphRecursionError([
-            `Recursion limit of ${config6.recursionLimit} reached`,
+            `Recursion limit of ${config4.recursionLimit} reached`,
             "without hitting a stop condition. You can increase the",
             `limit by setting the "recursionLimit" config key.`
           ].join(" "), { lc_error_code: "GRAPH_RECURSION_LIMIT" });
@@ -102272,9 +102272,9 @@ var init_graph2 = __esm({
         return ChannelWrite.registerWriter(new RunnableCallable({
           name: "<branch_run>",
           trace: false,
-          func: async (input, config6) => {
+          func: async (input, config4) => {
             try {
-              return await this._route(input, config6, writer2, reader);
+              return await this._route(input, config4, writer2, reader);
             } catch (e) {
               if (e.name === NodeInterrupt.unminifiable_name) console.warn("[WARN]: 'NodeInterrupt' thrown in conditional edge. This is likely a bug in your graph implementation.\nNodeInterrupt should only be thrown inside a node, not in edge conditions.");
               throw e;
@@ -102282,15 +102282,15 @@ var init_graph2 = __esm({
           }
         }));
       }
-      async _route(input, config6, writer2, reader) {
-        let result = await this.path.invoke(reader ? reader(config6) : input, config6);
+      async _route(input, config4, writer2, reader) {
+        let result = await this.path.invoke(reader ? reader(config4) : input, config4);
         if (!Array.isArray(result)) result = [result];
         let destinations;
         if (this.ends) destinations = result.map((r) => _isSend(r) ? r : this.ends[r]);
         else destinations = result;
         if (destinations.some((dest) => !dest)) throw new Error("Branch condition returned unknown or null destination");
         if (destinations.filter(_isSend).some((packet) => packet.node === "__end__")) throw new InvalidUpdateError("Cannot send a packet to the END node");
-        return await writer2(destinations, config6) ?? input;
+        return await writer2(destinations, config4) ?? input;
       }
     };
     Graph$1 = class {
@@ -102474,8 +102474,8 @@ var init_graph2 = __esm({
       /**
       * Returns a drawable representation of the computation graph.
       */
-      async getGraphAsync(config6) {
-        const xray = config6?.xray;
+      async getGraphAsync(config4) {
+        const xray = config4?.xray;
         const graph = new Graph();
         const startNodes = { [START]: graph.addNode({ schema: external_exports2.any() }, START) };
         const endNodes = {};
@@ -102497,9 +102497,9 @@ var init_graph2 = __esm({
           if (xray) {
             const newXrayValue = typeof xray === "number" ? xray - 1 : xray;
             const drawableSubgraph = subgraphs[key] !== void 0 ? await subgraphs[key].getGraphAsync({
-              ...config6,
+              ...config4,
               xray: newXrayValue
-            }) : node.getGraph(config6);
+            }) : node.getGraph(config4);
             drawableSubgraph.trimFirstNode();
             drawableSubgraph.trimLastNode();
             if (Object.keys(drawableSubgraph.nodes).length > 1) {
@@ -102563,8 +102563,8 @@ var init_graph2 = __esm({
       *
       * @deprecated Use getGraphAsync instead. The async method will be the default in the next minor core release.
       */
-      getGraph(config6) {
-        const xray = config6?.xray;
+      getGraph(config4) {
+        const xray = config4?.xray;
         const graph = new Graph();
         const startNodes = { [START]: graph.addNode({ schema: external_exports2.any() }, START) };
         const endNodes = {};
@@ -102584,9 +102584,9 @@ var init_graph2 = __esm({
           if (xray) {
             const newXrayValue = typeof xray === "number" ? xray - 1 : xray;
             const drawableSubgraph = subgraphs[key] !== void 0 ? subgraphs[key].getGraph({
-              ...config6,
+              ...config4,
               xray: newXrayValue
-            }) : node.getGraph(config6);
+            }) : node.getGraph(config4);
             drawableSubgraph.trimFirstNode();
             drawableSubgraph.trimLastNode();
             if (Object.keys(drawableSubgraph.nodes).length > 1) {
@@ -102793,12 +102793,12 @@ var init_reduced = __esm({
       * Optional extra fields to merge into the generated JSON Schema (e.g., for documentation or constraints).
       */
       jsonSchemaExtra;
-      constructor(valueSchema, init) {
-        this.reducer = init.reducer;
-        this.jsonSchemaExtra = init.jsonSchemaExtra;
+      constructor(valueSchema, init4) {
+        this.reducer = init4.reducer;
+        this.jsonSchemaExtra = init4.jsonSchemaExtra;
         this.valueSchema = valueSchema;
-        this.inputSchema = "inputSchema" in init ? init.inputSchema : valueSchema;
-        this.jsonSchemaExtra = init.jsonSchemaExtra;
+        this.inputSchema = "inputSchema" in init4 ? init4.inputSchema : valueSchema;
+        this.jsonSchemaExtra = init4.jsonSchemaExtra;
       }
       static isInstance(value) {
         return typeof value === "object" && value !== null && REDUCED_VALUE_SYMBOL in value && value[REDUCED_VALUE_SYMBOL] === true;
@@ -102839,9 +102839,9 @@ var init_untracked = __esm({
       * @param schema - Optional type schema describing the value (e.g. a Zod schema).
       * @param init - Optional options for tracking updates or enabling multiple-writes-per-step.
       */
-      constructor(schema, init) {
+      constructor(schema, init4) {
         this.schema = schema;
-        this.guard = init?.guard ?? true;
+        this.guard = init4?.guard ?? true;
       }
       static isInstance(value) {
         return typeof value === "object" && value !== null && UNTRACKED_VALUE_SYMBOL in value;
@@ -103476,33 +103476,33 @@ var init_state2 = __esm({
       _writer;
       constructor(stateOrInit, options) {
         super();
-        const init = this._normalizeToStateGraphInit(stateOrInit, options);
-        const stateSchema4 = init.state ?? init.stateSchema ?? init.input;
+        const init4 = this._normalizeToStateGraphInit(stateOrInit, options);
+        const stateSchema4 = init4.state ?? init4.stateSchema ?? init4.input;
         if (!stateSchema4) throw new StateGraphInputError();
         const stateChannelDef = this._getChannelsFromSchema(stateSchema4);
         this._schemaDefinition = stateChannelDef;
         if (StateSchema.isInstance(stateSchema4)) this._schemaRuntimeDefinition = stateSchema4;
         else if (isInteropZodObject(stateSchema4)) this._schemaRuntimeDefinition = stateSchema4;
-        if (init.input) if (StateSchema.isInstance(init.input)) this._inputRuntimeDefinition = init.input;
-        else if (isInteropZodObject(init.input)) this._inputRuntimeDefinition = init.input;
+        if (init4.input) if (StateSchema.isInstance(init4.input)) this._inputRuntimeDefinition = init4.input;
+        else if (isInteropZodObject(init4.input)) this._inputRuntimeDefinition = init4.input;
         else this._inputRuntimeDefinition = PartialStateSchema;
         else this._inputRuntimeDefinition = PartialStateSchema;
-        if (init.output) if (StateSchema.isInstance(init.output)) this._outputRuntimeDefinition = init.output;
-        else if (isInteropZodObject(init.output)) this._outputRuntimeDefinition = init.output;
+        if (init4.output) if (StateSchema.isInstance(init4.output)) this._outputRuntimeDefinition = init4.output;
+        else if (isInteropZodObject(init4.output)) this._outputRuntimeDefinition = init4.output;
         else this._outputRuntimeDefinition = this._schemaRuntimeDefinition;
         else this._outputRuntimeDefinition = this._schemaRuntimeDefinition;
-        const inputChannelDef = init.input ? this._getChannelsFromSchema(init.input) : stateChannelDef;
-        const outputChannelDef = init.output ? this._getChannelsFromSchema(init.output) : stateChannelDef;
+        const inputChannelDef = init4.input ? this._getChannelsFromSchema(init4.input) : stateChannelDef;
+        const outputChannelDef = init4.output ? this._getChannelsFromSchema(init4.output) : stateChannelDef;
         this._inputDefinition = inputChannelDef;
         this._outputDefinition = outputChannelDef;
         this._addSchema(this._schemaDefinition);
         this._addSchema(this._inputDefinition);
         this._addSchema(this._outputDefinition);
-        if (init.context) {
-          if (isInteropZodObject(init.context)) this._configRuntimeSchema = init.context;
+        if (init4.context) {
+          if (isInteropZodObject(init4.context)) this._configRuntimeSchema = init4.context;
         }
-        this._interrupt = init.interrupt;
-        this._writer = init.writer;
+        this._interrupt = init4.interrupt;
+        this._writer = init4.writer;
       }
       /**
       * Normalize all constructor input patterns to a unified StateGraphInit object.
@@ -103783,7 +103783,7 @@ var init_state2 = __esm({
         }
       }
       attachBranch(start, _, branch, options = { withReader: true }) {
-        const branchWriter = async (packets, config6) => {
+        const branchWriter = async (packets, config4) => {
           const filteredPackets = packets.filter((p) => p !== END);
           if (!filteredPackets.length) return;
           const writes = filteredPackets.map((p) => {
@@ -103794,11 +103794,11 @@ var init_state2 = __esm({
             };
           });
           await ChannelWrite.doWrite({
-            ...config6,
-            tags: (config6.tags ?? []).concat([TAG_HIDDEN])
+            ...config4,
+            tags: (config4.tags ?? []).concat([TAG_HIDDEN])
           }, writes);
         };
-        this.nodes[start].writers.push(branch.run(branchWriter, options.withReader ? (config6) => ChannelRead.doRead(config6, this.streamChannels ?? this.outputChannels, true) : void 0));
+        this.nodes[start].writers.push(branch.run(branchWriter, options.withReader ? (config4) => ChannelRead.doRead(config4, this.streamChannels ?? this.outputChannels, true) : void 0));
       }
       async _validateInput(input) {
         if (input == null) return input;
@@ -103842,10 +103842,10 @@ var init_state2 = __esm({
       isInterrupted(input) {
         return isInterrupted(input);
       }
-      async _validateContext(config6) {
+      async _validateContext(config4) {
         const configSchema = this.builder._configRuntimeSchema;
-        if (isInteropZodObject(configSchema)) interopParse(configSchema, config6);
-        return config6;
+        if (isInteropZodObject(configSchema)) interopParse(configSchema, config4);
+        return config4;
       }
     };
   }
@@ -103854,22 +103854,22 @@ var init_state2 = __esm({
 // node_modules/@langchain/langgraph/dist/graph/message.js
 function pushMessage(message, options) {
   const { stateKey: userStateKey, ...userConfig } = options ?? {};
-  const config6 = ensureLangGraphConfig(userConfig);
+  const config4 = ensureLangGraphConfig(userConfig);
   let stateKey = userStateKey ?? "messages";
   if (userStateKey === null) stateKey = void 0;
   const validMessage = coerceMessageLikeToMessage(message);
   if (!validMessage.id) throw new Error("Message ID is required.");
   const messagesHandler = (() => {
-    if (Array.isArray(config6.callbacks)) return config6.callbacks;
-    if (typeof config6.callbacks !== "undefined") return config6.callbacks.handlers;
+    if (Array.isArray(config4.callbacks)) return config4.callbacks;
+    if (typeof config4.callbacks !== "undefined") return config4.callbacks.handlers;
     return [];
   })().find((cb) => "name" in cb && cb.name === "StreamMessagesHandler");
   if (messagesHandler) {
-    const metadata = config6.metadata ?? {};
+    const metadata = config4.metadata ?? {};
     const namespace = (metadata.langgraph_checkpoint_ns ?? "").split("|");
     messagesHandler._emit([namespace, metadata], validMessage, void 0, false);
   }
-  if (stateKey) config6.configurable?.__pregel_send?.([[stateKey, validMessage]]);
+  if (stateKey) config4.configurable?.__pregel_send?.([[stateKey, validMessage]]);
   return validMessage;
 }
 var MessageGraph;
@@ -104015,9 +104015,9 @@ var init_messages_annotation = __esm({
 
 // node_modules/@langchain/langgraph/dist/writer.js
 function writer(chunk) {
-  const config6 = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
-  if (!config6) throw new Error("Called interrupt() outside the context of a graph.");
-  const conf = config6.configurable;
+  const config4 = AsyncLocalStorageProviderSingleton2.getRunnableConfig();
+  if (!config4) throw new Error("Called interrupt() outside the context of a graph.");
+  const conf = config4.configurable;
   if (!conf) throw new Error("No configurable found in config");
   return conf.writer?.(chunk);
 }
@@ -110901,20 +110901,29 @@ var require_country_locale_map = __commonJS({
 var server_exports = {};
 __export(server_exports, {
   ENV: () => ENV,
-  IS_AXIOS_DEBUG: () => IS_AXIOS_DEBUG,
-  IS_DEBUG: () => IS_DEBUG,
-  VERSION: () => VERSION4,
-  app: () => app
+  app: () => app,
+  cacheService: () => cacheService
 });
 module.exports = __toCommonJS(server_exports);
-var import_express = __toESM(require_express2());
 var import_dotenv = __toESM(require_main());
+var import_express = __toESM(require_express2());
 
 // src/services/database.service.ts
 var fs = __toESM(require("node:fs"));
 
 // src/configs/database.config.ts
 var import_promise = __toESM(require_promise());
+
+// src/utils/boolean.utils.ts
+var import_assert = __toESM(require("assert"));
+function numberToBoolean(value) {
+  if (value == null) return void 0;
+  (0, import_assert.default)(value === 0 || value === 1, "Only 0,1 are accepted.");
+  return value !== 0;
+}
+function stringToBoolean(str2 = "false") {
+  return JSON.parse(str2?.toLowerCase());
+}
 
 // src/utils/math.utils.ts
 function getRandomNumber(n3) {
@@ -110927,26 +110936,63 @@ function _parseInt(value) {
   return parseInt(value);
 }
 
-// src/utils/boolean.utils.ts
-var import_assert = __toESM(require("assert"));
-function numberToBoolean(value) {
-  if (value == null) return void 0;
-  (0, import_assert.default)(value === 0 || value === 1, "Only 0,1 are accepted.");
-  return value !== 0;
-}
-function stringToBoolean(str2 = "false") {
-  return JSON.parse(str2);
+// src/utils/properties.utils.ts
+var TMDB_AUTH_KEY;
+var CHAT_GPT_API_KEY;
+var VERSION;
+var DOMAIN;
+var IP_API_ENDPOINT;
+var PORT;
+var DEBUG;
+var AXIOS_DEBUG;
+var AI_PROMPT_FILE_PATH;
+var SMTP_HOST;
+var SMTP_PORT;
+var SMTP_SECURE;
+var SMTP_USER;
+var SMTP_PASS;
+var DATABASE_ENABLE_DB;
+var DATABASE_DROP;
+var DATABASE_QUERY_DEBUG;
+var DATABASE_HOST;
+var DATABASE_PORT;
+var DATABASE_USER;
+var DATABASE_PASSWORD;
+var DATABASE_NAME;
+function init() {
+  TMDB_AUTH_KEY = process.env.TMDB_AUTH_KEY;
+  CHAT_GPT_API_KEY = process.env.CHAT_GPT_API_KEY;
+  VERSION = process.env.VERSION;
+  DOMAIN = process.env.DOMAIN;
+  IP_API_ENDPOINT = process.env.IP_API_ENDPOINT;
+  PORT = _parseInt(process.env.PORT);
+  DEBUG = stringToBoolean(process.env.DEBUG);
+  AXIOS_DEBUG = stringToBoolean(process.env.AXIOS_DEBUG);
+  AI_PROMPT_FILE_PATH = process.env.AI_PROMPT_FILE_PATH;
+  SMTP_HOST = process.env.SMTP_HOST;
+  SMTP_PORT = _parseInt(process.env.SMTP_PORT);
+  SMTP_SECURE = stringToBoolean(process.env.SMTP_SECURE);
+  SMTP_USER = process.env.SMTP_USER;
+  SMTP_PASS = process.env.SMTP_PASS;
+  DATABASE_ENABLE_DB = stringToBoolean(process.env.DATABASE_ENABLE_DB);
+  DATABASE_DROP = stringToBoolean(process.env.DATABASE_DROP);
+  DATABASE_QUERY_DEBUG = stringToBoolean(process.env.DATABASE_QUERY_DEBUG);
+  DATABASE_HOST = process.env.DATABASE_HOST;
+  DATABASE_PORT = _parseInt(process.env.DATABASE_PORT);
+  DATABASE_USER = process.env.DATABASE_USER;
+  DATABASE_PASSWORD = process.env.DATABASE_PASSWORD;
+  DATABASE_NAME = process.env.DATABASE_NAME;
 }
 
 // src/configs/database.config.ts
 var pool = void 0;
-if (stringToBoolean(process.env.DATABASE_ENABLE_DB)) {
+if (DATABASE_ENABLE_DB) {
   pool = import_promise.default.createPool({
-    host: process.env.DATABASE_HOST,
-    port: _parseInt(process.env.DATABASE_PORT),
-    user: process.env.DATABASE_USER,
-    password: process.env.DATABASE_PASSWORD,
-    database: process.env.DATABASE_NAME,
+    host: DATABASE_HOST,
+    port: DATABASE_PORT,
+    user: DATABASE_USER,
+    password: DATABASE_PASSWORD,
+    database: DATABASE_NAME,
     waitForConnections: true,
     connectionLimit: 10,
     maxIdle: 10,
@@ -111069,9 +111115,9 @@ function removeQuotes(str2) {
 }
 
 // src/services/database.service.ts
-var _connection = stringToBoolean(process.env.DATABASE_ENABLE_DB) ? pool.getConnection() : void 0;
+var _connection = DATABASE_ENABLE_DB ? pool.getConnection() : void 0;
 var connection = _connection;
-var debug = stringToBoolean(process.env.DATABASE_QUERY_DEBUG);
+var debug = DATABASE_QUERY_DEBUG;
 async function dropAndCreate() {
   await dropDatabase();
   await createDatabase();
@@ -111155,7 +111201,11 @@ async function release() {
 var import_express_session = __toESM(require_express_session());
 var import_node_crypto = require("node:crypto");
 var import_assert3 = __toESM(require("assert"));
-function config() {
+var _session = void 0;
+function init2() {
+  if (_session !== void 0) {
+    return;
+  }
   const opts = {
     genid(req) {
       return (0, import_node_crypto.randomUUID)();
@@ -111173,18 +111223,31 @@ function config() {
     import_assert3.default.ok(opts.cookie);
     opts.cookie.secure = true;
   }
-  app.use((0, import_express_session.default)(opts));
+  _session = (0, import_express_session.default)(opts);
+}
+function getSession() {
+  import_assert3.default.ok(
+    _session,
+    "Session is not configured yet. Please call init() first."
+  );
+  return _session;
 }
 
 // src/configs/cors.config.ts
-function config2() {
-  app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", process.env.DOMAIN);
+function init3() {
+  return (req, res, next) => {
+    res.header("Access-Control-Allow-Origin", DOMAIN);
     res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-session-auth, x-session-country, x-session-lang");
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    );
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, x-session-auth, x-session-country, x-session-lang"
+    );
     next();
-  });
+  };
 }
 
 // node_modules/axios/lib/helpers/bind.js
@@ -111263,9 +111326,14 @@ function getGlobal() {
 var G = getGlobal();
 var FormDataCtor = typeof G.FormData !== "undefined" ? G.FormData : void 0;
 var isFormData = (thing) => {
-  let kind;
-  return thing && (FormDataCtor && thing instanceof FormDataCtor || isFunction(thing.append) && ((kind = kindOf(thing)) === "formdata" || // detect form-data instance
-  kind === "object" && isFunction(thing.toString) && thing.toString() === "[object FormData]"));
+  if (!thing) return false;
+  if (FormDataCtor && thing instanceof FormDataCtor) return true;
+  const proto = getPrototypeOf(thing);
+  if (!proto || proto === Object.prototype) return false;
+  if (!isFunction(thing.append)) return false;
+  const kind = kindOf(thing);
+  return kind === "formdata" || // detect form-data instance
+  kind === "object" && isFunction(thing.toString) && thing.toString() === "[object FormData]";
 };
 var isURLSearchParams = kindOfTest("URLSearchParams");
 var [isReadableStream, isRequest, isResponse, isHeaders] = [
@@ -111623,8 +111691,8 @@ var utils_default = {
 
 // node_modules/axios/lib/core/AxiosError.js
 var AxiosError = class _AxiosError extends Error {
-  static from(error48, code, config6, request, response, customProps) {
-    const axiosError = new _AxiosError(error48.message, code || error48.code, config6, request, response);
+  static from(error48, code, config4, request, response, customProps) {
+    const axiosError = new _AxiosError(error48.message, code || error48.code, config4, request, response);
     axiosError.cause = error48;
     axiosError.name = error48.name;
     if (error48.status != null && axiosError.status == null) {
@@ -111644,7 +111712,7 @@ var AxiosError = class _AxiosError extends Error {
    *
    * @returns {Error} The created error.
    */
-  constructor(message, code, config6, request, response) {
+  constructor(message, code, config4, request, response) {
     super(message);
     Object.defineProperty(this, "message", {
       value: message,
@@ -111655,7 +111723,7 @@ var AxiosError = class _AxiosError extends Error {
     this.name = "AxiosError";
     this.isAxiosError = true;
     code && (this.code = code);
-    config6 && (this.config = config6);
+    config4 && (this.config = config4);
     request && (this.request = request);
     if (response) {
       this.response = response;
@@ -111694,6 +111762,7 @@ AxiosError.ERR_BAD_REQUEST = "ERR_BAD_REQUEST";
 AxiosError.ERR_CANCELED = "ERR_CANCELED";
 AxiosError.ERR_NOT_SUPPORT = "ERR_NOT_SUPPORT";
 AxiosError.ERR_INVALID_URL = "ERR_INVALID_URL";
+AxiosError.ERR_FORM_DATA_DEPTH_EXCEEDED = "ERR_FORM_DATA_DEPTH_EXCEEDED";
 var AxiosError_default = AxiosError;
 
 // node_modules/axios/lib/platform/node/classes/FormData.js
@@ -111742,6 +111811,7 @@ function toFormData(obj, formData, options) {
   const dots = options.dots;
   const indexes = options.indexes;
   const _Blob = options.Blob || typeof Blob !== "undefined" && Blob;
+  const maxDepth = options.maxDepth === void 0 ? 100 : options.maxDepth;
   const useBlob = _Blob && utils_default.isSpecCompliantForm(formData);
   if (!utils_default.isFunction(visitor)) {
     throw new TypeError("visitor must be a function");
@@ -111796,8 +111866,14 @@ function toFormData(obj, formData, options) {
     convertValue,
     isVisitable
   });
-  function build(value, path3) {
+  function build(value, path3, depth = 0) {
     if (utils_default.isUndefined(value)) return;
+    if (depth > maxDepth) {
+      throw new AxiosError_default(
+        "Object is too deeply nested (" + depth + " levels). Max depth: " + maxDepth,
+        AxiosError_default.ERR_FORM_DATA_DEPTH_EXCEEDED
+      );
+    }
     if (stack.indexOf(value) !== -1) {
       throw Error("Circular reference detected in " + path3.join("."));
     }
@@ -111805,7 +111881,7 @@ function toFormData(obj, formData, options) {
     utils_default.forEach(value, function each(el, key) {
       const result = !(utils_default.isUndefined(el) || el === null) && visitor.call(formData, el, utils_default.isString(key) ? key.trim() : key, path3, exposedHelpers);
       if (result === true) {
-        build(el, path3 ? path3.concat(key) : [key]);
+        build(el, path3 ? path3.concat(key) : [key], depth + 1);
       }
     });
     stack.pop();
@@ -111826,10 +111902,9 @@ function encode(str2) {
     "(": "%28",
     ")": "%29",
     "~": "%7E",
-    "%20": "+",
-    "%00": "\0"
+    "%20": "+"
   };
-  return encodeURIComponent(str2).replace(/[!'()~]|%20|%00/g, function replacer(match) {
+  return encodeURIComponent(str2).replace(/[!'()~]|%20/g, function replacer(match) {
     return charMap[match];
   });
 }
@@ -112055,7 +112130,7 @@ function formDataToJSON(formData) {
     name = !name && utils_default.isArray(target) ? target.length : name;
     if (isLast) {
       if (utils_default.hasOwnProp(target, name)) {
-        target[name] = [target[name], value];
+        target[name] = utils_default.isArray(target[name]) ? target[name].concat(value) : [target[name], value];
       } else {
         target[name] = value;
       }
@@ -112082,6 +112157,7 @@ function formDataToJSON(formData) {
 var formDataToJSON_default = formDataToJSON;
 
 // node_modules/axios/lib/defaults/index.js
+var own = (obj, key) => obj != null && utils_default.hasOwnProp(obj, key) ? obj[key] : void 0;
 function stringifySafely(rawValue2, parser, encoder2) {
   if (utils_default.isString(rawValue2)) {
     try {
@@ -112122,15 +112198,17 @@ var defaults = {
       }
       let isFileList2;
       if (isObjectPayload) {
+        const formSerializer = own(this, "formSerializer");
         if (contentType.indexOf("application/x-www-form-urlencoded") > -1) {
-          return toURLEncodedForm(data, this.formSerializer).toString();
+          return toURLEncodedForm(data, formSerializer).toString();
         }
         if ((isFileList2 = utils_default.isFileList(data)) || contentType.indexOf("multipart/form-data") > -1) {
-          const _FormData = this.env && this.env.FormData;
+          const env = own(this, "env");
+          const _FormData = env && env.FormData;
           return toFormData_default(
             isFileList2 ? { "files[]": data } : data,
             _FormData && new _FormData(),
-            this.formSerializer
+            formSerializer
           );
         }
       }
@@ -112143,21 +112221,22 @@ var defaults = {
   ],
   transformResponse: [
     function transformResponse(data) {
-      const transitional2 = this.transitional || defaults.transitional;
+      const transitional2 = own(this, "transitional") || defaults.transitional;
       const forcedJSONParsing = transitional2 && transitional2.forcedJSONParsing;
-      const JSONRequested = this.responseType === "json";
+      const responseType = own(this, "responseType");
+      const JSONRequested = responseType === "json";
       if (utils_default.isResponse(data) || utils_default.isReadableStream(data)) {
         return data;
       }
-      if (data && utils_default.isString(data) && (forcedJSONParsing && !this.responseType || JSONRequested)) {
+      if (data && utils_default.isString(data) && (forcedJSONParsing && !responseType || JSONRequested)) {
         const silentJSONParsing = transitional2 && transitional2.silentJSONParsing;
         const strictJSONParsing = !silentJSONParsing && JSONRequested;
         try {
-          return JSON.parse(data, this.parseReviver);
+          return JSON.parse(data, own(this, "parseReviver"));
         } catch (e) {
           if (strictJSONParsing) {
             if (e.name === "SyntaxError") {
-              throw AxiosError_default.from(e, AxiosError_default.ERR_BAD_RESPONSE, this, null, this.response);
+              throw AxiosError_default.from(e, AxiosError_default.ERR_BAD_RESPONSE, this, null, own(this, "response"));
             }
             throw e;
           }
@@ -112241,14 +112320,37 @@ var parseHeaders_default = (rawHeaders) => {
 
 // node_modules/axios/lib/core/AxiosHeaders.js
 var $internals = /* @__PURE__ */ Symbol("internals");
+var INVALID_HEADER_VALUE_CHARS_RE = /[^\x09\x20-\x7E\x80-\xFF]/g;
+function trimSPorHTAB(str2) {
+  let start = 0;
+  let end = str2.length;
+  while (start < end) {
+    const code = str2.charCodeAt(start);
+    if (code !== 9 && code !== 32) {
+      break;
+    }
+    start += 1;
+  }
+  while (end > start) {
+    const code = str2.charCodeAt(end - 1);
+    if (code !== 9 && code !== 32) {
+      break;
+    }
+    end -= 1;
+  }
+  return start === 0 && end === str2.length ? str2 : str2.slice(start, end);
+}
 function normalizeHeader(header) {
   return header && String(header).trim().toLowerCase();
+}
+function sanitizeHeaderValue(str2) {
+  return trimSPorHTAB(str2.replace(INVALID_HEADER_VALUE_CHARS_RE, ""));
 }
 function normalizeValue(value) {
   if (value === false || value == null) {
     return value;
   }
-  return utils_default.isArray(value) ? value.map(normalizeValue) : String(value).replace(/[\r\n]+$/, "");
+  return utils_default.isArray(value) ? value.map(normalizeValue) : sanitizeHeaderValue(String(value));
 }
 function parseTokens(str2) {
   const tokens = /* @__PURE__ */ Object.create(null);
@@ -112477,12 +112579,12 @@ var AxiosHeaders_default = AxiosHeaders;
 
 // node_modules/axios/lib/core/transformData.js
 function transformData(fns, response) {
-  const config6 = this || defaults_default;
-  const context2 = response || config6;
+  const config4 = this || defaults_default;
+  const context2 = response || config4;
   const headers = AxiosHeaders_default.from(context2.headers);
   let data = context2.data;
   utils_default.forEach(fns, function transform2(fn) {
-    data = fn.call(config6, data, headers.normalize(), response ? response.status : void 0);
+    data = fn.call(config4, data, headers.normalize(), response ? response.status : void 0);
   });
   headers.normalize();
   return data;
@@ -112504,8 +112606,8 @@ var CanceledError = class extends AxiosError_default {
    *
    * @returns {CanceledError} The created error.
    */
-  constructor(message, config6, request) {
-    super(message == null ? "canceled" : message, AxiosError_default.ERR_CANCELED, config6, request);
+  constructor(message, config4, request) {
+    super(message == null ? "canceled" : message, AxiosError_default.ERR_CANCELED, config4, request);
     this.name = "CanceledError";
     this.__CANCEL__ = true;
   }
@@ -112546,7 +112648,7 @@ function combineURLs(baseURL, relativeURL) {
 // node_modules/axios/lib/core/buildFullPath.js
 function buildFullPath(baseURL, requestedURL, allowAbsoluteUrls) {
   let isRelativeUrl = !isAbsoluteURL(requestedURL);
-  if (baseURL && (isRelativeUrl || allowAbsoluteUrls == false)) {
+  if (baseURL && (isRelativeUrl || allowAbsoluteUrls === false)) {
     return combineURLs(baseURL, requestedURL);
   }
   return requestedURL;
@@ -112572,14 +112674,14 @@ function getProxyForUrl(url3) {
   var parsedUrl = (typeof url3 === "string" ? parseUrl(url3) : url3) || {};
   var proto = parsedUrl.protocol;
   var hostname3 = parsedUrl.host;
-  var port2 = parsedUrl.port;
+  var port = parsedUrl.port;
   if (typeof hostname3 !== "string" || !hostname3 || typeof proto !== "string") {
     return "";
   }
   proto = proto.split(":", 1)[0];
   hostname3 = hostname3.replace(/:\d*$/, "");
-  port2 = parseInt(port2) || DEFAULT_PORTS[proto] || 0;
-  if (!shouldProxy(hostname3, port2)) {
+  port = parseInt(port) || DEFAULT_PORTS[proto] || 0;
+  if (!shouldProxy(hostname3, port)) {
     return "";
   }
   var proxy = getEnv(proto + "_proxy") || getEnv("all_proxy");
@@ -112588,7 +112690,7 @@ function getProxyForUrl(url3) {
   }
   return proxy;
 }
-function shouldProxy(hostname3, port2) {
+function shouldProxy(hostname3, port) {
   var NO_PROXY = getEnv("no_proxy").toLowerCase();
   if (!NO_PROXY) {
     return true;
@@ -112603,7 +112705,7 @@ function shouldProxy(hostname3, port2) {
     var parsedProxy = proxy.match(/^(.+):(\d+)$/);
     var parsedProxyHostname = parsedProxy ? parsedProxy[1] : proxy;
     var parsedProxyPort = parsedProxy ? parseInt(parsedProxy[2]) : 0;
-    if (parsedProxyPort && parsedProxyPort !== port2) {
+    if (parsedProxyPort && parsedProxyPort !== port) {
       return true;
     }
     if (!/^[.*]/.test(parsedProxyHostname)) {
@@ -112624,11 +112726,12 @@ var import_http = __toESM(require("http"), 1);
 var import_https = __toESM(require("https"), 1);
 var import_http2 = __toESM(require("http2"), 1);
 var import_util2 = __toESM(require("util"), 1);
+var import_path = require("path");
 var import_follow_redirects = __toESM(require_follow_redirects(), 1);
 var import_zlib = __toESM(require("zlib"), 1);
 
 // node_modules/axios/lib/env/data.js
-var VERSION = "1.14.0";
+var VERSION2 = "1.15.2";
 
 // node_modules/axios/lib/helpers/parseProtocol.js
 function parseProtocol(url3) {
@@ -112827,7 +112930,8 @@ var FormDataPart = class {
     if (isStringValue) {
       value = textEncoder.encode(String(value).replace(/\r?\n|\r\n?/g, CRLF));
     } else {
-      headers += `Content-Type: ${value.type || "application/octet-stream"}${CRLF}`;
+      const safeType = String(value.type || "application/octet-stream").replace(/[\r\n]/g, "");
+      headers += `Content-Type: ${safeType}${CRLF}`;
     }
     this.headers = textEncoder.encode(headers + CRLF);
     this.contentLength = isStringValue ? value.byteLength : value.size;
@@ -112934,6 +113038,114 @@ var callbackify = (fn, reducer) => {
 };
 var callbackify_default = callbackify;
 
+// node_modules/axios/lib/helpers/shouldBypassProxy.js
+var LOOPBACK_HOSTNAMES = /* @__PURE__ */ new Set(["localhost"]);
+var isIPv4Loopback = (host) => {
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  if (parts[0] !== "127") return false;
+  return parts.every((p) => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+};
+var isIPv6Loopback = (host) => {
+  if (host === "::1") return true;
+  const v4MappedDotted = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4MappedDotted) return isIPv4Loopback(v4MappedDotted[1]);
+  const v4MappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (v4MappedHex) {
+    const high = parseInt(v4MappedHex[1], 16);
+    return high >= 32512 && high <= 32767;
+  }
+  const groups = host.split(":");
+  if (groups.length === 8) {
+    for (let i = 0; i < 7; i++) {
+      if (!/^0+$/.test(groups[i])) return false;
+    }
+    return /^0*1$/.test(groups[7]);
+  }
+  return false;
+};
+var isLoopback = (host) => {
+  if (!host) return false;
+  if (LOOPBACK_HOSTNAMES.has(host)) return true;
+  if (isIPv4Loopback(host)) return true;
+  return isIPv6Loopback(host);
+};
+var DEFAULT_PORTS2 = {
+  http: 80,
+  https: 443,
+  ws: 80,
+  wss: 443,
+  ftp: 21
+};
+var parseNoProxyEntry = (entry) => {
+  let entryHost = entry;
+  let entryPort = 0;
+  if (entryHost.charAt(0) === "[") {
+    const bracketIndex = entryHost.indexOf("]");
+    if (bracketIndex !== -1) {
+      const host = entryHost.slice(1, bracketIndex);
+      const rest = entryHost.slice(bracketIndex + 1);
+      if (rest.charAt(0) === ":" && /^\d+$/.test(rest.slice(1))) {
+        entryPort = Number.parseInt(rest.slice(1), 10);
+      }
+      return [host, entryPort];
+    }
+  }
+  const firstColon = entryHost.indexOf(":");
+  const lastColon = entryHost.lastIndexOf(":");
+  if (firstColon !== -1 && firstColon === lastColon && /^\d+$/.test(entryHost.slice(lastColon + 1))) {
+    entryPort = Number.parseInt(entryHost.slice(lastColon + 1), 10);
+    entryHost = entryHost.slice(0, lastColon);
+  }
+  return [entryHost, entryPort];
+};
+var normalizeNoProxyHost = (hostname3) => {
+  if (!hostname3) {
+    return hostname3;
+  }
+  if (hostname3.charAt(0) === "[" && hostname3.charAt(hostname3.length - 1) === "]") {
+    hostname3 = hostname3.slice(1, -1);
+  }
+  return hostname3.replace(/\.+$/, "");
+};
+function shouldBypassProxy(location2) {
+  let parsed;
+  try {
+    parsed = new URL(location2);
+  } catch (_err) {
+    return false;
+  }
+  const noProxy = (process.env.no_proxy || process.env.NO_PROXY || "").toLowerCase();
+  if (!noProxy) {
+    return false;
+  }
+  if (noProxy === "*") {
+    return true;
+  }
+  const port = Number.parseInt(parsed.port, 10) || DEFAULT_PORTS2[parsed.protocol.split(":", 1)[0]] || 0;
+  const hostname3 = normalizeNoProxyHost(parsed.hostname.toLowerCase());
+  return noProxy.split(/[\s,]+/).some((entry) => {
+    if (!entry) {
+      return false;
+    }
+    let [entryHost, entryPort] = parseNoProxyEntry(entry);
+    entryHost = normalizeNoProxyHost(entryHost);
+    if (!entryHost) {
+      return false;
+    }
+    if (entryPort && entryPort !== port) {
+      return false;
+    }
+    if (entryHost.charAt(0) === "*") {
+      entryHost = entryHost.slice(1);
+    }
+    if (entryHost.charAt(0) === ".") {
+      return hostname3.endsWith(entryHost);
+    }
+    return hostname3 === entryHost || isLoopback(hostname3) && isLoopback(entryHost);
+  });
+}
+
 // node_modules/axios/lib/helpers/speedometer.js
 function speedometer(samplesCount, min) {
   samplesCount = samplesCount || 10;
@@ -113010,19 +113222,19 @@ var progressEventReducer = (listener, isDownloadStream, freq = 3) => {
   let bytesNotified = 0;
   const _speedometer = speedometer_default(50, 250);
   return throttle_default((e) => {
-    const loaded = e.loaded;
+    const rawLoaded = e.loaded;
     const total = e.lengthComputable ? e.total : void 0;
-    const progressBytes = loaded - bytesNotified;
+    const loaded = total != null ? Math.min(rawLoaded, total) : rawLoaded;
+    const progressBytes = Math.max(0, loaded - bytesNotified);
     const rate = _speedometer(progressBytes);
-    const inRange = loaded <= total;
-    bytesNotified = loaded;
+    bytesNotified = Math.max(bytesNotified, loaded);
     const data = {
       loaded,
       total,
       progress: total ? loaded / total : void 0,
       bytes: progressBytes,
       rate: rate ? rate : void 0,
-      estimated: rate && total && inRange ? (total - loaded) / rate : void 0,
+      estimated: rate && total ? (total - loaded) / rate : void 0,
       event: e,
       lengthComputable: total != null,
       [isDownloadStream ? "download" : "upload"]: true
@@ -113106,6 +113318,8 @@ var brotliOptions = {
 var isBrotliSupported = utils_default.isFunction(import_zlib.default.createBrotliDecompress);
 var { http: httpFollow, https: httpsFollow } = import_follow_redirects.default;
 var isHttps = /https:?/;
+var kAxiosSocketListener = /* @__PURE__ */ Symbol("axios.http.socketListener");
+var kAxiosCurrentReq = /* @__PURE__ */ Symbol("axios.http.currentReq");
 var supportedProtocols = platform_default.protocols.map((protocol) => {
   return protocol + ":";
 });
@@ -113199,7 +113413,9 @@ function setProxy(options, configProxy, location2) {
   if (!proxy && proxy !== false) {
     const proxyUrl = getProxyForUrl(location2);
     if (proxyUrl) {
-      proxy = new URL(proxyUrl);
+      if (!shouldBypassProxy(location2)) {
+        proxy = new URL(proxyUrl);
+      }
     }
   }
   if (proxy) {
@@ -113288,17 +113504,24 @@ var http2Transport = {
     return req;
   }
 };
-var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
+var http_default = isHttpAdapterSupported && function httpAdapter(config4) {
   return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {
-    let { data, lookup: lookup2, family, httpVersion = 1, http2Options } = config6;
-    const { responseType, responseEncoding } = config6;
-    const method = config6.method.toUpperCase();
+    const own2 = (key) => utils_default.hasOwnProp(config4, key) ? config4[key] : void 0;
+    let data = own2("data");
+    let lookup2 = own2("lookup");
+    let family = own2("family");
+    let httpVersion = own2("httpVersion");
+    if (httpVersion === void 0) httpVersion = 1;
+    let http2Options = own2("http2Options");
+    const responseType = own2("responseType");
+    const responseEncoding = own2("responseEncoding");
+    const method = config4.method.toUpperCase();
     let isDone;
     let rejected = false;
     let req;
     httpVersion = +httpVersion;
     if (Number.isNaN(httpVersion)) {
-      throw TypeError(`Invalid protocol version: '${config6.httpVersion}' is not a number`);
+      throw TypeError(`Invalid protocol version: '${config4.httpVersion}' is not a number`);
     }
     if (httpVersion !== 1 && httpVersion !== 2) {
       throw TypeError(`Unsupported protocol version '${httpVersion}'`);
@@ -113321,7 +113544,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       try {
         abortEmitter.emit(
           "abort",
-          !reason || reason.type ? new CanceledError_default(null, config6, req) : reason
+          !reason || reason.type ? new CanceledError_default(null, config4, req) : reason
         );
       } catch (err) {
         console.warn("emit error", err);
@@ -113329,18 +113552,18 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
     }
     abortEmitter.once("abort", reject);
     const onFinished = () => {
-      if (config6.cancelToken) {
-        config6.cancelToken.unsubscribe(abort);
+      if (config4.cancelToken) {
+        config4.cancelToken.unsubscribe(abort);
       }
-      if (config6.signal) {
-        config6.signal.removeEventListener("abort", abort);
+      if (config4.signal) {
+        config4.signal.removeEventListener("abort", abort);
       }
       abortEmitter.removeAllListeners();
     };
-    if (config6.cancelToken || config6.signal) {
-      config6.cancelToken && config6.cancelToken.subscribe(abort);
-      if (config6.signal) {
-        config6.signal.aborted ? abort() : config6.signal.addEventListener("abort", abort);
+    if (config4.cancelToken || config4.signal) {
+      config4.cancelToken && config4.cancelToken.subscribe(abort);
+      if (config4.signal) {
+        config4.signal.aborted ? abort() : config4.signal.addEventListener("abort", abort);
       }
     }
     onDone((response, isRejected) => {
@@ -113360,19 +113583,19 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
         onFinished();
       }
     });
-    const fullPath = buildFullPath(config6.baseURL, config6.url, config6.allowAbsoluteUrls);
+    const fullPath = buildFullPath(config4.baseURL, config4.url, config4.allowAbsoluteUrls);
     const parsed = new URL(fullPath, platform_default.hasBrowserEnv ? platform_default.origin : void 0);
     const protocol = parsed.protocol || supportedProtocols[0];
     if (protocol === "data:") {
-      if (config6.maxContentLength > -1) {
-        const dataUrl = String(config6.url || fullPath || "");
+      if (config4.maxContentLength > -1) {
+        const dataUrl = String(config4.url || fullPath || "");
         const estimated = estimateDataURLDecodedBytes(dataUrl);
-        if (estimated > config6.maxContentLength) {
+        if (estimated > config4.maxContentLength) {
           return reject(
             new AxiosError_default(
-              "maxContentLength size of " + config6.maxContentLength + " exceeded",
+              "maxContentLength size of " + config4.maxContentLength + " exceeded",
               AxiosError_default.ERR_BAD_RESPONSE,
-              config6
+              config4
             )
           );
         }
@@ -113383,15 +113606,15 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
           status: 405,
           statusText: "method not allowed",
           headers: {},
-          config: config6
+          config: config4
         });
       }
       try {
-        convertedData = fromDataURI(config6.url, responseType === "blob", {
-          Blob: config6.env && config6.env.Blob
+        convertedData = fromDataURI(config4.url, responseType === "blob", {
+          Blob: config4.env && config4.env.Blob
         });
       } catch (err) {
-        throw AxiosError_default.from(err, AxiosError_default.ERR_BAD_REQUEST, config6);
+        throw AxiosError_default.from(err, AxiosError_default.ERR_BAD_REQUEST, config4);
       }
       if (responseType === "text") {
         convertedData = convertedData.toString(responseEncoding);
@@ -113406,18 +113629,18 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
         status: 200,
         statusText: "OK",
         headers: new AxiosHeaders_default(),
-        config: config6
+        config: config4
       });
     }
     if (supportedProtocols.indexOf(protocol) === -1) {
       return reject(
-        new AxiosError_default("Unsupported protocol " + protocol, AxiosError_default.ERR_BAD_REQUEST, config6)
+        new AxiosError_default("Unsupported protocol " + protocol, AxiosError_default.ERR_BAD_REQUEST, config4)
       );
     }
-    const headers = AxiosHeaders_default.from(config6.headers).normalize();
-    headers.set("User-Agent", "axios/" + VERSION, false);
-    const { onUploadProgress, onDownloadProgress } = config6;
-    const maxRate = config6.maxRate;
+    const headers = AxiosHeaders_default.from(config4.headers).normalize();
+    headers.set("User-Agent", "axios/" + VERSION2, false);
+    const { onUploadProgress, onDownloadProgress } = config4;
+    const maxRate = config4.maxRate;
     let maxUploadRate = void 0;
     let maxDownloadRate = void 0;
     if (utils_default.isSpecCompliantForm(data)) {
@@ -113428,11 +113651,11 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
           headers.set(formHeaders);
         },
         {
-          tag: `axios-${VERSION}-boundary`,
+          tag: `axios-${VERSION2}-boundary`,
           boundary: userBoundary && userBoundary[1] || void 0
         }
       );
-    } else if (utils_default.isFormData(data) && utils_default.isFunction(data.getHeaders)) {
+    } else if (utils_default.isFormData(data) && utils_default.isFunction(data.getHeaders) && data.getHeaders !== Object.prototype.getHeaders) {
       headers.set(data.getHeaders());
       if (!headers.hasContentLength()) {
         try {
@@ -113456,17 +113679,17 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
           new AxiosError_default(
             "Data after transformation must be a string, an ArrayBuffer, a Buffer, or a Stream",
             AxiosError_default.ERR_BAD_REQUEST,
-            config6
+            config4
           )
         );
       }
       headers.setContentLength(data.length, false);
-      if (config6.maxBodyLength > -1 && data.length > config6.maxBodyLength) {
+      if (config4.maxBodyLength > -1 && data.length > config4.maxBodyLength) {
         return reject(
           new AxiosError_default(
             "Request body larger than maxBodyLength limit",
             AxiosError_default.ERR_BAD_REQUEST,
-            config6
+            config4
           )
         );
       }
@@ -113503,9 +113726,10 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       );
     }
     let auth = void 0;
-    if (config6.auth) {
-      const username = config6.auth.username || "";
-      const password = config6.auth.password || "";
+    const configAuth = own2("auth");
+    if (configAuth) {
+      const username = configAuth.username || "";
+      const password = configAuth.password || "";
       auth = username + ":" + password;
     }
     if (!auth && parsed.username) {
@@ -113518,13 +113742,13 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
     try {
       path3 = buildURL(
         parsed.pathname + parsed.search,
-        config6.params,
-        config6.paramsSerializer
+        config4.params,
+        config4.paramsSerializer
       ).replace(/^\?/, "");
     } catch (err) {
       const customErr = new Error(err.message);
-      customErr.config = config6;
-      customErr.url = config6.url;
+      customErr.config = config4;
+      customErr.url = config4.url;
       customErr.exists = true;
       return reject(customErr);
     }
@@ -113533,58 +113757,79 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       "gzip, compress, deflate" + (isBrotliSupported ? ", br" : ""),
       false
     );
-    const options = {
+    const options = Object.assign(/* @__PURE__ */ Object.create(null), {
       path: path3,
       method,
       headers: headers.toJSON(),
-      agents: { http: config6.httpAgent, https: config6.httpsAgent },
+      agents: { http: config4.httpAgent, https: config4.httpsAgent },
       auth,
       protocol,
       family,
       beforeRedirect: dispatchBeforeRedirect,
-      beforeRedirects: {},
+      beforeRedirects: /* @__PURE__ */ Object.create(null),
       http2Options
-    };
+    });
     !utils_default.isUndefined(lookup2) && (options.lookup = lookup2);
-    if (config6.socketPath) {
-      options.socketPath = config6.socketPath;
+    if (config4.socketPath) {
+      if (typeof config4.socketPath !== "string") {
+        return reject(new AxiosError_default(
+          "socketPath must be a string",
+          AxiosError_default.ERR_BAD_OPTION_VALUE,
+          config4
+        ));
+      }
+      if (config4.allowedSocketPaths != null) {
+        const allowed = Array.isArray(config4.allowedSocketPaths) ? config4.allowedSocketPaths : [config4.allowedSocketPaths];
+        const resolvedSocket = (0, import_path.resolve)(config4.socketPath);
+        const isAllowed = allowed.some(
+          (entry) => typeof entry === "string" && (0, import_path.resolve)(entry) === resolvedSocket
+        );
+        if (!isAllowed) {
+          return reject(new AxiosError_default(
+            `socketPath "${config4.socketPath}" is not permitted by allowedSocketPaths`,
+            AxiosError_default.ERR_BAD_OPTION_VALUE,
+            config4
+          ));
+        }
+      }
+      options.socketPath = config4.socketPath;
     } else {
       options.hostname = parsed.hostname.startsWith("[") ? parsed.hostname.slice(1, -1) : parsed.hostname;
       options.port = parsed.port;
       setProxy(
         options,
-        config6.proxy,
+        config4.proxy,
         protocol + "//" + parsed.hostname + (parsed.port ? ":" + parsed.port : "") + options.path
       );
     }
     let transport;
     const isHttpsRequest = isHttps.test(options.protocol);
-    options.agent = isHttpsRequest ? config6.httpsAgent : config6.httpAgent;
+    options.agent = isHttpsRequest ? config4.httpsAgent : config4.httpAgent;
     if (isHttp2) {
       transport = http2Transport;
     } else {
-      if (config6.transport) {
-        transport = config6.transport;
-      } else if (config6.maxRedirects === 0) {
+      const configTransport = own2("transport");
+      if (configTransport) {
+        transport = configTransport;
+      } else if (config4.maxRedirects === 0) {
         transport = isHttpsRequest ? import_https.default : import_http.default;
       } else {
-        if (config6.maxRedirects) {
-          options.maxRedirects = config6.maxRedirects;
+        if (config4.maxRedirects) {
+          options.maxRedirects = config4.maxRedirects;
         }
-        if (config6.beforeRedirect) {
-          options.beforeRedirects.config = config6.beforeRedirect;
+        const configBeforeRedirect = own2("beforeRedirect");
+        if (configBeforeRedirect) {
+          options.beforeRedirects.config = configBeforeRedirect;
         }
         transport = isHttpsRequest ? httpsFollow : httpFollow;
       }
     }
-    if (config6.maxBodyLength > -1) {
-      options.maxBodyLength = config6.maxBodyLength;
+    if (config4.maxBodyLength > -1) {
+      options.maxBodyLength = config4.maxBodyLength;
     } else {
       options.maxBodyLength = Infinity;
     }
-    if (config6.insecureHTTPParser) {
-      options.insecureHTTPParser = config6.insecureHTTPParser;
-    }
+    options.insecureHTTPParser = Boolean(own2("insecureHTTPParser"));
     req = transport.request(options, function handleResponse(res) {
       if (req.destroyed) return;
       const streams = [res];
@@ -113607,7 +113852,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       }
       let responseStream = res;
       const lastRequest = res.req || req;
-      if (config6.decompress !== false && res.headers["content-encoding"]) {
+      if (config4.decompress !== false && res.headers["content-encoding"]) {
         if (method === "HEAD" || res.statusCode === 204) {
           delete res.headers["content-encoding"];
         }
@@ -113637,10 +113882,32 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
         status: res.statusCode,
         statusText: res.statusMessage,
         headers: new AxiosHeaders_default(res.headers),
-        config: config6,
+        config: config4,
         request: lastRequest
       };
       if (responseType === "stream") {
+        if (config4.maxContentLength > -1) {
+          const limit2 = config4.maxContentLength;
+          const source = responseStream;
+          async function* enforceMaxContentLength() {
+            let totalResponseBytes = 0;
+            for await (const chunk of source) {
+              totalResponseBytes += chunk.length;
+              if (totalResponseBytes > limit2) {
+                throw new AxiosError_default(
+                  "maxContentLength size of " + limit2 + " exceeded",
+                  AxiosError_default.ERR_BAD_RESPONSE,
+                  config4,
+                  lastRequest
+                );
+              }
+              yield chunk;
+            }
+          }
+          responseStream = import_stream4.default.Readable.from(enforceMaxContentLength(), {
+            objectMode: false
+          });
+        }
         response.data = responseStream;
         settle(resolve, reject, response);
       } else {
@@ -113649,14 +113916,14 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
         responseStream.on("data", function handleStreamData(chunk) {
           responseBuffer.push(chunk);
           totalResponseBytes += chunk.length;
-          if (config6.maxContentLength > -1 && totalResponseBytes > config6.maxContentLength) {
+          if (config4.maxContentLength > -1 && totalResponseBytes > config4.maxContentLength) {
             rejected = true;
             responseStream.destroy();
             abort(
               new AxiosError_default(
-                "maxContentLength size of " + config6.maxContentLength + " exceeded",
+                "maxContentLength size of " + config4.maxContentLength + " exceeded",
                 AxiosError_default.ERR_BAD_RESPONSE,
-                config6,
+                config4,
                 lastRequest
               )
             );
@@ -113669,7 +113936,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
           const err = new AxiosError_default(
             "stream has been aborted",
             AxiosError_default.ERR_BAD_RESPONSE,
-            config6,
+            config4,
             lastRequest
           );
           responseStream.destroy(err);
@@ -113677,7 +113944,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
         });
         responseStream.on("error", function handleStreamError(err) {
           if (req.destroyed) return;
-          reject(AxiosError_default.from(err, null, config6, lastRequest));
+          reject(AxiosError_default.from(err, null, config4, lastRequest));
         });
         responseStream.on("end", function handleStreamEnd() {
           try {
@@ -113690,7 +113957,7 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
             }
             response.data = responseData;
           } catch (err) {
-            return reject(AxiosError_default.from(err, null, config6, response.request, response));
+            return reject(AxiosError_default.from(err, null, config4, response.request, response));
           }
           settle(resolve, reject, response);
         });
@@ -113710,19 +113977,34 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       }
     });
     req.on("error", function handleRequestError(err) {
-      reject(AxiosError_default.from(err, null, config6, req));
+      reject(AxiosError_default.from(err, null, config4, req));
     });
     req.on("socket", function handleRequestSocket(socket) {
       socket.setKeepAlive(true, 1e3 * 60);
+      if (!socket[kAxiosSocketListener]) {
+        socket.on("error", function handleSocketError(err) {
+          const current = socket[kAxiosCurrentReq];
+          if (current && !current.destroyed) {
+            current.destroy(err);
+          }
+        });
+        socket[kAxiosSocketListener] = true;
+      }
+      socket[kAxiosCurrentReq] = req;
+      req.once("close", function clearCurrentReq() {
+        if (socket[kAxiosCurrentReq] === req) {
+          socket[kAxiosCurrentReq] = null;
+        }
+      });
     });
-    if (config6.timeout) {
-      const timeout = parseInt(config6.timeout, 10);
+    if (config4.timeout) {
+      const timeout = parseInt(config4.timeout, 10);
       if (Number.isNaN(timeout)) {
         abort(
           new AxiosError_default(
             "error trying to parse `config.timeout` to int",
             AxiosError_default.ERR_BAD_OPTION_VALUE,
-            config6,
+            config4,
             req
           )
         );
@@ -113730,16 +114012,16 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       }
       req.setTimeout(timeout, function handleRequestTimeout() {
         if (isDone) return;
-        let timeoutErrorMessage = config6.timeout ? "timeout of " + config6.timeout + "ms exceeded" : "timeout exceeded";
-        const transitional2 = config6.transitional || transitional_default;
-        if (config6.timeoutErrorMessage) {
-          timeoutErrorMessage = config6.timeoutErrorMessage;
+        let timeoutErrorMessage = config4.timeout ? "timeout of " + config4.timeout + "ms exceeded" : "timeout exceeded";
+        const transitional2 = config4.transitional || transitional_default;
+        if (config4.timeoutErrorMessage) {
+          timeoutErrorMessage = config4.timeoutErrorMessage;
         }
         abort(
           new AxiosError_default(
             timeoutErrorMessage,
             transitional2.clarifyTimeoutError ? AxiosError_default.ETIMEDOUT : AxiosError_default.ECONNABORTED,
-            config6,
+            config4,
             req
           )
         );
@@ -113759,10 +114041,40 @@ var http_default = isHttpAdapterSupported && function httpAdapter(config6) {
       });
       data.on("close", () => {
         if (!ended && !errored) {
-          abort(new CanceledError_default("Request stream has been aborted", config6, req));
+          abort(new CanceledError_default("Request stream has been aborted", config4, req));
         }
       });
-      data.pipe(req);
+      let uploadStream = data;
+      if (config4.maxBodyLength > -1 && config4.maxRedirects === 0) {
+        const limit2 = config4.maxBodyLength;
+        let bytesSent = 0;
+        uploadStream = import_stream4.default.pipeline(
+          [
+            data,
+            new import_stream4.default.Transform({
+              transform(chunk, _enc, cb) {
+                bytesSent += chunk.length;
+                if (bytesSent > limit2) {
+                  return cb(
+                    new AxiosError_default(
+                      "Request body larger than maxBodyLength limit",
+                      AxiosError_default.ERR_BAD_REQUEST,
+                      config4,
+                      req
+                    )
+                  );
+                }
+                cb(null, chunk);
+              }
+            })
+          ],
+          utils_default.noop
+        );
+        uploadStream.on("error", (err) => {
+          if (!req.destroyed) req.destroy(err);
+        });
+      }
+      uploadStream.pipe(req);
     } else {
       data && req.write(data);
       req.end();
@@ -113829,7 +114141,13 @@ var cookies_default = platform_default.hasStandardBrowserEnv ? (
 var headersToObject = (thing) => thing instanceof AxiosHeaders_default ? { ...thing } : thing;
 function mergeConfig(config1, config22) {
   config22 = config22 || {};
-  const config6 = {};
+  const config4 = /* @__PURE__ */ Object.create(null);
+  Object.defineProperty(config4, "hasOwnProperty", {
+    value: Object.prototype.hasOwnProperty,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  });
   function getMergedValue(target, source, prop, caseless) {
     if (utils_default.isPlainObject(target) && utils_default.isPlainObject(source)) {
       return utils_default.merge.call({ caseless }, target, source);
@@ -113860,9 +114178,9 @@ function mergeConfig(config1, config22) {
     }
   }
   function mergeDirectKeys(a, b, prop) {
-    if (prop in config22) {
+    if (utils_default.hasOwnProp(config22, prop)) {
       return getMergedValue(a, b);
-    } else if (prop in config1) {
+    } else if (utils_default.hasOwnProp(config1, prop)) {
       return getMergedValue(void 0, a);
     }
   }
@@ -113893,6 +114211,7 @@ function mergeConfig(config1, config22) {
     httpsAgent: defaultToConfig2,
     cancelToken: defaultToConfig2,
     socketPath: defaultToConfig2,
+    allowedSocketPaths: defaultToConfig2,
     responseEncoding: defaultToConfig2,
     validateStatus: mergeDirectKeys,
     headers: (a, b, prop) => mergeDeepProperties(headersToObject(a), headersToObject(b), prop, true)
@@ -113900,21 +114219,32 @@ function mergeConfig(config1, config22) {
   utils_default.forEach(Object.keys({ ...config1, ...config22 }), function computeConfigValue(prop) {
     if (prop === "__proto__" || prop === "constructor" || prop === "prototype") return;
     const merge3 = utils_default.hasOwnProp(mergeMap, prop) ? mergeMap[prop] : mergeDeepProperties;
-    const configValue = merge3(config1[prop], config22[prop], prop);
-    utils_default.isUndefined(configValue) && merge3 !== mergeDirectKeys || (config6[prop] = configValue);
+    const a = utils_default.hasOwnProp(config1, prop) ? config1[prop] : void 0;
+    const b = utils_default.hasOwnProp(config22, prop) ? config22[prop] : void 0;
+    const configValue = merge3(a, b, prop);
+    utils_default.isUndefined(configValue) && merge3 !== mergeDirectKeys || (config4[prop] = configValue);
   });
-  return config6;
+  return config4;
 }
 
 // node_modules/axios/lib/helpers/resolveConfig.js
-var resolveConfig_default = (config6) => {
-  const newConfig = mergeConfig({}, config6);
-  let { data, withXSRFToken, xsrfHeaderName, xsrfCookieName, headers, auth } = newConfig;
+var resolveConfig_default = (config4) => {
+  const newConfig = mergeConfig({}, config4);
+  const own2 = (key) => utils_default.hasOwnProp(newConfig, key) ? newConfig[key] : void 0;
+  const data = own2("data");
+  let withXSRFToken = own2("withXSRFToken");
+  const xsrfHeaderName = own2("xsrfHeaderName");
+  const xsrfCookieName = own2("xsrfCookieName");
+  let headers = own2("headers");
+  const auth = own2("auth");
+  const baseURL = own2("baseURL");
+  const allowAbsoluteUrls = own2("allowAbsoluteUrls");
+  const url3 = own2("url");
   newConfig.headers = headers = AxiosHeaders_default.from(headers);
   newConfig.url = buildURL(
-    buildFullPath(newConfig.baseURL, newConfig.url, newConfig.allowAbsoluteUrls),
-    config6.params,
-    config6.paramsSerializer
+    buildFullPath(baseURL, url3, allowAbsoluteUrls),
+    config4.params,
+    config4.paramsSerializer
   );
   if (auth) {
     headers.set(
@@ -113938,8 +114268,11 @@ var resolveConfig_default = (config6) => {
     }
   }
   if (platform_default.hasStandardBrowserEnv) {
-    withXSRFToken && utils_default.isFunction(withXSRFToken) && (withXSRFToken = withXSRFToken(newConfig));
-    if (withXSRFToken || withXSRFToken !== false && isURLSameOrigin_default(newConfig.url)) {
+    if (utils_default.isFunction(withXSRFToken)) {
+      withXSRFToken = withXSRFToken(newConfig);
+    }
+    const shouldSendXSRF = withXSRFToken === true || withXSRFToken == null && isURLSameOrigin_default(newConfig.url);
+    if (shouldSendXSRF) {
       const xsrfValue = xsrfHeaderName && xsrfCookieName && cookies_default.read(xsrfCookieName);
       if (xsrfValue) {
         headers.set(xsrfHeaderName, xsrfValue);
@@ -113951,9 +114284,9 @@ var resolveConfig_default = (config6) => {
 
 // node_modules/axios/lib/adapters/xhr.js
 var isXHRAdapterSupported = typeof XMLHttpRequest !== "undefined";
-var xhr_default = isXHRAdapterSupported && function(config6) {
+var xhr_default = isXHRAdapterSupported && function(config4) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
-    const _config = resolveConfig_default(config6);
+    const _config = resolveConfig_default(config4);
     let requestData = _config.data;
     const requestHeaders = AxiosHeaders_default.from(_config.headers).normalize();
     let { responseType, onUploadProgress, onDownloadProgress } = _config;
@@ -113982,7 +114315,7 @@ var xhr_default = isXHRAdapterSupported && function(config6) {
         status: request.status,
         statusText: request.statusText,
         headers: responseHeaders,
-        config: config6,
+        config: config4,
         request
       };
       settle(
@@ -114015,12 +114348,12 @@ var xhr_default = isXHRAdapterSupported && function(config6) {
       if (!request) {
         return;
       }
-      reject(new AxiosError_default("Request aborted", AxiosError_default.ECONNABORTED, config6, request));
+      reject(new AxiosError_default("Request aborted", AxiosError_default.ECONNABORTED, config4, request));
       request = null;
     };
     request.onerror = function handleError(event) {
       const msg = event && event.message ? event.message : "Network Error";
-      const err = new AxiosError_default(msg, AxiosError_default.ERR_NETWORK, config6, request);
+      const err = new AxiosError_default(msg, AxiosError_default.ERR_NETWORK, config4, request);
       err.event = event || null;
       reject(err);
       request = null;
@@ -114035,7 +114368,7 @@ var xhr_default = isXHRAdapterSupported && function(config6) {
         new AxiosError_default(
           timeoutErrorMessage,
           transitional2.clarifyTimeoutError ? AxiosError_default.ETIMEDOUT : AxiosError_default.ECONNABORTED,
-          config6,
+          config4,
           request
         )
       );
@@ -114067,7 +114400,7 @@ var xhr_default = isXHRAdapterSupported && function(config6) {
         if (!request) {
           return;
         }
-        reject(!cancel || cancel.type ? new CanceledError_default(null, config6, request) : cancel);
+        reject(!cancel || cancel.type ? new CanceledError_default(null, config4, request) : cancel);
         request.abort();
         request = null;
       };
@@ -114082,7 +114415,7 @@ var xhr_default = isXHRAdapterSupported && function(config6) {
         new AxiosError_default(
           "Unsupported protocol " + protocol + ":",
           AxiosError_default.ERR_BAD_REQUEST,
-          config6
+          config4
         )
       );
       return;
@@ -114243,16 +114576,18 @@ var factory = (env) => {
   const encodeText = isFetchSupported && (typeof TextEncoder2 === "function" ? /* @__PURE__ */ ((encoder2) => (str2) => encoder2.encode(str2))(new TextEncoder2()) : async (str2) => new Uint8Array(await new Request(str2).arrayBuffer()));
   const supportsRequestStream = isRequestSupported && isReadableStreamSupported && test(() => {
     let duplexAccessed = false;
-    const body = new ReadableStream2();
-    const hasContentType = new Request(platform_default.origin, {
-      body,
+    const request = new Request(platform_default.origin, {
+      body: new ReadableStream2(),
       method: "POST",
       get duplex() {
         duplexAccessed = true;
         return "half";
       }
-    }).headers.has("Content-Type");
-    body.cancel();
+    });
+    const hasContentType = request.headers.has("Content-Type");
+    if (request.body != null) {
+      request.body.cancel();
+    }
     return duplexAccessed && !hasContentType;
   });
   const supportsResponseStream = isResponseSupported && isReadableStreamSupported && test(() => utils_default.isReadableStream(new Response2("").body));
@@ -114261,7 +114596,7 @@ var factory = (env) => {
   };
   isFetchSupported && (() => {
     ["text", "arrayBuffer", "blob", "formData", "stream"].forEach((type) => {
-      !resolvers[type] && (resolvers[type] = (res, config6) => {
+      !resolvers[type] && (resolvers[type] = (res, config4) => {
         let method = res && res[type];
         if (method) {
           return method.call(res);
@@ -114269,7 +114604,7 @@ var factory = (env) => {
         throw new AxiosError_default(
           `Response type '${type}' is not supported`,
           AxiosError_default.ERR_NOT_SUPPORT,
-          config6
+          config4
         );
       });
     });
@@ -114302,7 +114637,7 @@ var factory = (env) => {
     const length = utils_default.toFiniteNumber(headers.getContentLength());
     return length == null ? getBodyLength(body) : length;
   };
-  return async (config6) => {
+  return async (config4) => {
     let {
       url: url3,
       method,
@@ -114316,7 +114651,7 @@ var factory = (env) => {
       headers,
       withCredentials = "same-origin",
       fetchOptions
-    } = resolveConfig_default(config6);
+    } = resolveConfig_default(config4);
     let _fetch = envFetch || fetch;
     responseType = responseType ? (responseType + "").toLowerCase() : "text";
     let composedSignal = composeSignals_default(
@@ -114351,6 +114686,12 @@ var factory = (env) => {
         withCredentials = withCredentials ? "include" : "omit";
       }
       const isCredentialsSupported = isRequestSupported && "credentials" in Request.prototype;
+      if (utils_default.isFormData(data)) {
+        const contentType = headers.getContentType();
+        if (contentType && /^multipart\/form-data/i.test(contentType) && !/boundary=/i.test(contentType)) {
+          headers.delete("content-type");
+        }
+      }
       const resolvedOptions = {
         ...fetchOptions,
         signal: composedSignal,
@@ -114384,7 +114725,7 @@ var factory = (env) => {
       responseType = responseType || "text";
       let responseData = await resolvers[utils_default.findKey(resolvers, responseType) || "text"](
         response,
-        config6
+        config4
       );
       !isStreamResponse && unsubscribe && unsubscribe();
       return await new Promise((resolve, reject) => {
@@ -114393,7 +114734,7 @@ var factory = (env) => {
           headers: AxiosHeaders_default.from(response.headers),
           status: response.status,
           statusText: response.statusText,
-          config: config6,
+          config: config4,
           request
         });
       });
@@ -114404,7 +114745,7 @@ var factory = (env) => {
           new AxiosError_default(
             "Network Error",
             AxiosError_default.ERR_NETWORK,
-            config6,
+            config4,
             request,
             err && err.response
           ),
@@ -114413,13 +114754,13 @@ var factory = (env) => {
           }
         );
       }
-      throw AxiosError_default.from(err, err && err.code, config6, request, err && err.response);
+      throw AxiosError_default.from(err, err && err.code, config4, request, err && err.response);
     }
   };
 };
 var seedCache = /* @__PURE__ */ new Map();
-var getFetch = (config6) => {
-  let env = config6 && config6.env || {};
+var getFetch = (config4) => {
+  let env = config4 && config4.env || {};
   const { fetch: fetch2, Request, Response: Response2 } = env;
   const seeds = [Request, Response2, fetch2];
   let len = seeds.length, i = len, seed, target, map2 = seedCache;
@@ -114452,7 +114793,7 @@ utils_default.forEach(knownAdapters, (fn, value) => {
 });
 var renderReason = (reason) => `- ${reason}`;
 var isResolvedHandle = (adapter2) => utils_default.isFunction(adapter2) || adapter2 === null || adapter2 === false;
-function getAdapter(adapters, config6) {
+function getAdapter(adapters, config4) {
   adapters = utils_default.isArray(adapters) ? adapters : [adapters];
   const { length } = adapters;
   let nameOrAdapter;
@@ -114468,7 +114809,7 @@ function getAdapter(adapters, config6) {
         throw new AxiosError_default(`Unknown adapter '${id}'`);
       }
     }
-    if (adapter2 && (utils_default.isFunction(adapter2) || (adapter2 = adapter2.get(config6)))) {
+    if (adapter2 && (utils_default.isFunction(adapter2) || (adapter2 = adapter2.get(config4)))) {
       break;
     }
     rejectedReasons[id || "#" + i] = adapter2;
@@ -114499,36 +114840,36 @@ var adapters_default = {
 };
 
 // node_modules/axios/lib/core/dispatchRequest.js
-function throwIfCancellationRequested(config6) {
-  if (config6.cancelToken) {
-    config6.cancelToken.throwIfRequested();
+function throwIfCancellationRequested(config4) {
+  if (config4.cancelToken) {
+    config4.cancelToken.throwIfRequested();
   }
-  if (config6.signal && config6.signal.aborted) {
-    throw new CanceledError_default(null, config6);
+  if (config4.signal && config4.signal.aborted) {
+    throw new CanceledError_default(null, config4);
   }
 }
-function dispatchRequest(config6) {
-  throwIfCancellationRequested(config6);
-  config6.headers = AxiosHeaders_default.from(config6.headers);
-  config6.data = transformData.call(config6, config6.transformRequest);
-  if (["post", "put", "patch"].indexOf(config6.method) !== -1) {
-    config6.headers.setContentType("application/x-www-form-urlencoded", false);
+function dispatchRequest(config4) {
+  throwIfCancellationRequested(config4);
+  config4.headers = AxiosHeaders_default.from(config4.headers);
+  config4.data = transformData.call(config4, config4.transformRequest);
+  if (["post", "put", "patch"].indexOf(config4.method) !== -1) {
+    config4.headers.setContentType("application/x-www-form-urlencoded", false);
   }
-  const adapter2 = adapters_default.getAdapter(config6.adapter || defaults_default.adapter, config6);
-  return adapter2(config6).then(
+  const adapter2 = adapters_default.getAdapter(config4.adapter || defaults_default.adapter, config4);
+  return adapter2(config4).then(
     function onAdapterResolution(response) {
-      throwIfCancellationRequested(config6);
-      response.data = transformData.call(config6, config6.transformResponse, response);
+      throwIfCancellationRequested(config4);
+      response.data = transformData.call(config4, config4.transformResponse, response);
       response.headers = AxiosHeaders_default.from(response.headers);
       return response;
     },
     function onAdapterRejection(reason) {
       if (!isCancel(reason)) {
-        throwIfCancellationRequested(config6);
+        throwIfCancellationRequested(config4);
         if (reason && reason.response) {
           reason.response.data = transformData.call(
-            config6,
-            config6.transformResponse,
+            config4,
+            config4.transformResponse,
             reason.response
           );
           reason.response.headers = AxiosHeaders_default.from(reason.response.headers);
@@ -114549,7 +114890,7 @@ var validators = {};
 var deprecatedWarnings = {};
 validators.transitional = function transitional(validator2, version2, message) {
   function formatMessage(opt, desc) {
-    return "[Axios v" + VERSION + "] Transitional option '" + opt + "'" + desc + (message ? ". " + message : "");
+    return "[Axios v" + VERSION2 + "] Transitional option '" + opt + "'" + desc + (message ? ". " + message : "");
   }
   return (value, opt, opts) => {
     if (validator2 === false) {
@@ -114584,7 +114925,7 @@ function assertOptions(options, schema, allowUnknown) {
   let i = keys.length;
   while (i-- > 0) {
     const opt = keys[i];
-    const validator2 = schema[opt];
+    const validator2 = Object.prototype.hasOwnProperty.call(schema, opt) ? schema[opt] : void 0;
     if (validator2) {
       const value = options[opt];
       const result = value === void 0 || validator2(value, opt, options);
@@ -114624,19 +114965,30 @@ var Axios = class {
    *
    * @returns {Promise} The Promise to be fulfilled
    */
-  async request(configOrUrl, config6) {
+  async request(configOrUrl, config4) {
     try {
-      return await this._request(configOrUrl, config6);
+      return await this._request(configOrUrl, config4);
     } catch (err) {
       if (err instanceof Error) {
         let dummy = {};
         Error.captureStackTrace ? Error.captureStackTrace(dummy) : dummy = new Error();
-        const stack = dummy.stack ? dummy.stack.replace(/^.+\n/, "") : "";
+        const stack = (() => {
+          if (!dummy.stack) {
+            return "";
+          }
+          const firstNewlineIndex = dummy.stack.indexOf("\n");
+          return firstNewlineIndex === -1 ? "" : dummy.stack.slice(firstNewlineIndex + 1);
+        })();
         try {
           if (!err.stack) {
             err.stack = stack;
-          } else if (stack && !String(err.stack).endsWith(stack.replace(/^.+\n.+\n/, ""))) {
-            err.stack += "\n" + stack;
+          } else if (stack) {
+            const firstNewlineIndex = stack.indexOf("\n");
+            const secondNewlineIndex = firstNewlineIndex === -1 ? -1 : stack.indexOf("\n", firstNewlineIndex + 1);
+            const stackWithoutTwoTopLines = secondNewlineIndex === -1 ? "" : stack.slice(secondNewlineIndex + 1);
+            if (!String(err.stack).endsWith(stackWithoutTwoTopLines)) {
+              err.stack += "\n" + stack;
+            }
           }
         } catch (e) {
         }
@@ -114644,15 +114996,15 @@ var Axios = class {
       throw err;
     }
   }
-  _request(configOrUrl, config6) {
+  _request(configOrUrl, config4) {
     if (typeof configOrUrl === "string") {
-      config6 = config6 || {};
-      config6.url = configOrUrl;
+      config4 = config4 || {};
+      config4.url = configOrUrl;
     } else {
-      config6 = configOrUrl || {};
+      config4 = configOrUrl || {};
     }
-    config6 = mergeConfig(this.defaults, config6);
-    const { transitional: transitional2, paramsSerializer, headers } = config6;
+    config4 = mergeConfig(this.defaults, config4);
+    const { transitional: transitional2, paramsSerializer, headers } = config4;
     if (transitional2 !== void 0) {
       validator_default.assertOptions(
         transitional2,
@@ -114667,7 +115019,7 @@ var Axios = class {
     }
     if (paramsSerializer != null) {
       if (utils_default.isFunction(paramsSerializer)) {
-        config6.paramsSerializer = {
+        config4.paramsSerializer = {
           serialize: paramsSerializer
         };
       } else {
@@ -114681,34 +115033,34 @@ var Axios = class {
         );
       }
     }
-    if (config6.allowAbsoluteUrls !== void 0) {
+    if (config4.allowAbsoluteUrls !== void 0) {
     } else if (this.defaults.allowAbsoluteUrls !== void 0) {
-      config6.allowAbsoluteUrls = this.defaults.allowAbsoluteUrls;
+      config4.allowAbsoluteUrls = this.defaults.allowAbsoluteUrls;
     } else {
-      config6.allowAbsoluteUrls = true;
+      config4.allowAbsoluteUrls = true;
     }
     validator_default.assertOptions(
-      config6,
+      config4,
       {
         baseUrl: validators2.spelling("baseURL"),
         withXsrfToken: validators2.spelling("withXSRFToken")
       },
       true
     );
-    config6.method = (config6.method || this.defaults.method || "get").toLowerCase();
-    let contextHeaders = headers && utils_default.merge(headers.common, headers[config6.method]);
+    config4.method = (config4.method || this.defaults.method || "get").toLowerCase();
+    let contextHeaders = headers && utils_default.merge(headers.common, headers[config4.method]);
     headers && utils_default.forEach(["delete", "get", "head", "post", "put", "patch", "common"], (method) => {
       delete headers[method];
     });
-    config6.headers = AxiosHeaders_default.concat(contextHeaders, headers);
+    config4.headers = AxiosHeaders_default.concat(contextHeaders, headers);
     const requestInterceptorChain = [];
     let synchronousRequestInterceptors = true;
     this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor2) {
-      if (typeof interceptor2.runWhen === "function" && interceptor2.runWhen(config6) === false) {
+      if (typeof interceptor2.runWhen === "function" && interceptor2.runWhen(config4) === false) {
         return;
       }
       synchronousRequestInterceptors = synchronousRequestInterceptors && interceptor2.synchronous;
-      const transitional3 = config6.transitional || transitional_default;
+      const transitional3 = config4.transitional || transitional_default;
       const legacyInterceptorReqResOrdering = transitional3 && transitional3.legacyInterceptorReqResOrdering;
       if (legacyInterceptorReqResOrdering) {
         requestInterceptorChain.unshift(interceptor2.fulfilled, interceptor2.rejected);
@@ -114728,14 +115080,14 @@ var Axios = class {
       chain.unshift(...requestInterceptorChain);
       chain.push(...responseInterceptorChain);
       len = chain.length;
-      promise2 = Promise.resolve(config6);
+      promise2 = Promise.resolve(config4);
       while (i < len) {
         promise2 = promise2.then(chain[i++], chain[i++]);
       }
       return promise2;
     }
     len = requestInterceptorChain.length;
-    let newConfig = config6;
+    let newConfig = config4;
     while (i < len) {
       const onFulfilled = requestInterceptorChain[i++];
       const onRejected = requestInterceptorChain[i++];
@@ -114758,28 +115110,28 @@ var Axios = class {
     }
     return promise2;
   }
-  getUri(config6) {
-    config6 = mergeConfig(this.defaults, config6);
-    const fullPath = buildFullPath(config6.baseURL, config6.url, config6.allowAbsoluteUrls);
-    return buildURL(fullPath, config6.params, config6.paramsSerializer);
+  getUri(config4) {
+    config4 = mergeConfig(this.defaults, config4);
+    const fullPath = buildFullPath(config4.baseURL, config4.url, config4.allowAbsoluteUrls);
+    return buildURL(fullPath, config4.params, config4.paramsSerializer);
   }
 };
 utils_default.forEach(["delete", "get", "head", "options"], function forEachMethodNoData(method) {
-  Axios.prototype[method] = function(url3, config6) {
+  Axios.prototype[method] = function(url3, config4) {
     return this.request(
-      mergeConfig(config6 || {}, {
+      mergeConfig(config4 || {}, {
         method,
         url: url3,
-        data: (config6 || {}).data
+        data: (config4 || {}).data
       })
     );
   };
 });
 utils_default.forEach(["post", "put", "patch"], function forEachMethodWithData(method) {
   function generateHTTPMethod(isForm) {
-    return function httpMethod(url3, data, config6) {
+    return function httpMethod(url3, data, config4) {
       return this.request(
-        mergeConfig(config6 || {}, {
+        mergeConfig(config4 || {}, {
           method,
           headers: isForm ? {
             "Content-Type": "multipart/form-data"
@@ -114825,11 +115177,11 @@ var CancelToken = class _CancelToken {
       };
       return promise2;
     };
-    executor(function cancel(message, config6, request) {
+    executor(function cancel(message, config4, request) {
       if (token.reason) {
         return;
       }
-      token.reason = new CanceledError_default(message, config6, request);
+      token.reason = new CanceledError_default(message, config4, request);
       resolvePromise(token.reason);
     });
   }
@@ -114998,7 +115350,7 @@ axios.Axios = Axios_default;
 axios.CanceledError = CanceledError_default;
 axios.CancelToken = CancelToken_default;
 axios.isCancel = isCancel;
-axios.VERSION = VERSION;
+axios.VERSION = VERSION2;
 axios.toFormData = toFormData_default;
 axios.AxiosError = AxiosError_default;
 axios.Cancel = axios.CanceledError;
@@ -115022,7 +115374,7 @@ var {
   CanceledError: CanceledError2,
   isCancel: isCancel2,
   CancelToken: CancelToken2,
-  VERSION: VERSION2,
+  VERSION: VERSION3,
   all: all2,
   Cancel,
   isAxiosError: isAxiosError2,
@@ -115036,9 +115388,9 @@ var {
 } = axios_default;
 
 // src/configs/axios.config.ts
-function config3() {
+function config() {
   axios_default.interceptors.request.use((request) => {
-    if (IS_AXIOS_DEBUG) {
+    if (AXIOS_DEBUG) {
       console.log("Starting Request", JSON.stringify(request, null, 2));
     }
     return request;
@@ -115134,15 +115486,15 @@ var MODEL_PROVIDER_CONFIG = {
 };
 var SUPPORTED_PROVIDERS = Object.keys(MODEL_PROVIDER_CONFIG);
 async function getChatModelByClassName(className, modelProvider) {
-  let config6;
-  if (modelProvider) config6 = MODEL_PROVIDER_CONFIG[modelProvider];
+  let config4;
+  if (modelProvider) config4 = MODEL_PROVIDER_CONFIG[modelProvider];
   else {
     const providerEntry = Object.entries(MODEL_PROVIDER_CONFIG).find(([, c]) => c.className === className);
-    config6 = providerEntry ? providerEntry[1] : void 0;
+    config4 = providerEntry ? providerEntry[1] : void 0;
   }
-  if (!config6) return;
+  if (!config4) return;
   try {
-    return (await import(config6.package))[config6.className];
+    return (await import(config4.package))[config4.className];
   } catch (e) {
     const err = e;
     if ("code" in err && err.code?.toString().includes("ERR_MODULE_NOT_FOUND") && "message" in err && typeof err.message === "string") {
@@ -115155,15 +115507,15 @@ async function getChatModelByClassName(className, modelProvider) {
 async function _initChatModelHelper(model, modelProvider, params = {}) {
   const modelProviderCopy = modelProvider || _inferModelProvider(model);
   if (!modelProviderCopy) throw new Error(`Unable to infer model provider for { model: ${model} }, please specify modelProvider directly.`);
-  const config6 = MODEL_PROVIDER_CONFIG[modelProviderCopy];
-  if (!config6) {
+  const config4 = MODEL_PROVIDER_CONFIG[modelProviderCopy];
+  if (!config4) {
     const supported = SUPPORTED_PROVIDERS.join(", ");
     throw new Error(`Unsupported { modelProvider: ${modelProviderCopy} }.
 
 Supported model providers are: ${supported}`);
   }
   const { modelProvider: _unused, ...passedParams } = params;
-  return new (await getChatModelByClassName(config6.className, modelProviderCopy))({
+  return new (await getChatModelByClassName(config4.className, modelProviderCopy))({
     model,
     ...passedParams
   });
@@ -115216,13 +115568,13 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
       ls_integration: "langchain_init_chat_model"
     };
   }
-  async _getModelInstance(config6) {
-    const cacheKey = this._getCacheKey(config6);
+  async _getModelInstance(config4) {
+    const cacheKey = this._getCacheKey(config4);
     const cachedModel = this._modelInstanceCache.get(cacheKey);
     if (cachedModel) return cachedModel;
     const params = {
       ...this._defaultConfig,
-      ...this._modelParams(config6)
+      ...this._modelParams(config4)
     };
     let initializedModel = await _initChatModelHelper(params.model, params.modelProvider, params);
     for (const [method, args] of Object.entries(this._queuedMethodOperations)) if (method in initializedModel && typeof initializedModel[method] === "function") initializedModel = await initializedModel[method](...args);
@@ -115252,8 +115604,8 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
       queuedMethodOperations: newQueuedOperations
     });
   };
-  _modelParams(config6) {
-    const configurable = config6?.configurable ?? {};
+  _modelParams(config4) {
+    const configurable = config4?.configurable ?? {};
     let modelParams = {};
     for (const [key, value] of Object.entries(configurable)) if (key.startsWith(this._configPrefix)) {
       const strippedKey = this._removePrefix(key, this._configPrefix);
@@ -115270,8 +115622,8 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
   * @param {RunnableConfig | undefined} [config] - The config to bind.
   * @returns {RunnableBinding<RunInput, RunOutput, CallOptions>} A new RunnableBinding with the bound config.
   */
-  withConfig(config6) {
-    const mergedConfig = { ...config6 || {} };
+  withConfig(config4) {
+    const mergedConfig = { ...config4 || {} };
     const modelParams = this._modelParams(mergedConfig);
     const remainingConfig = Object.fromEntries(Object.entries(mergedConfig).filter(([k]) => k !== "configurable"));
     remainingConfig.configurable = Object.fromEntries(Object.entries(mergedConfig.configurable || {}).filter(([k]) => this._configPrefix && !Object.keys(modelParams).includes(this._removePrefix(k, this._configPrefix))));
@@ -115290,8 +115642,8 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
   }
   async invoke(input, options) {
     const model = await this._getModelInstance(options);
-    const config6 = ensureConfig(options);
-    return model.invoke(input, config6);
+    const config4 = ensureConfig(options);
+    return model.invoke(input, config4);
   }
   async stream(input, options) {
     const wrappedGenerator = new AsyncGeneratorWithSetup({
@@ -115306,13 +115658,13 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
   }
   async *transform(generator, options) {
     const model = await this._getModelInstance(options);
-    const config6 = ensureConfig(options);
-    yield* model.transform(generator, config6);
+    const config4 = ensureConfig(options);
+    yield* model.transform(generator, config4);
   }
   async *streamLog(input, options, streamOptions) {
     const model = await this._getModelInstance(options);
-    const config6 = ensureConfig(options);
-    yield* model.streamLog(input, config6, {
+    const config4 = ensureConfig(options);
+    yield* model.streamLog(input, config4, {
       ...streamOptions,
       _schemaFormat: "original",
       includeNames: streamOptions?.includeNames,
@@ -115327,8 +115679,8 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
     const outerThis = this;
     async function* wrappedGenerator() {
       const model = await outerThis._getModelInstance(options);
-      const config6 = ensureConfig(options);
-      const eventStream = model.streamEvents(input, config6, streamOptions);
+      const config4 = ensureConfig(options);
+      const eventStream = model.streamEvents(input, config4, streamOptions);
       for await (const chunk of eventStream) yield chunk;
     }
     return IterableReadableStream.fromAsyncGenerator(wrappedGenerator());
@@ -115344,8 +115696,8 @@ var ConfigurableModel = class ConfigurableModel2 extends BaseChatModel {
     return this._modelInstanceCache.get(cacheKey)?.profile ?? {};
   }
   /** @internal */
-  _getCacheKey(config6) {
-    let toStringify = config6 ?? {};
+  _getCacheKey(config4) {
+    let toStringify = config4 ?? {};
     if (toStringify.configurable) {
       const { configurable } = toStringify;
       const filtered = {};
@@ -115400,12 +115752,12 @@ async function initChatModel(model, fields) {
 init_tools2();
 function createHeadlessTool(fields) {
   const { name, description, schema } = fields;
-  const wrappedTool = tool(async (args, config6) => {
+  const wrappedTool = tool(async (args, config4) => {
     const { interrupt: interrupt2 } = await Promise.resolve().then(() => (init_dist4(), dist_exports));
     return interrupt2({
       type: "tool",
       toolCall: {
-        id: config6?.toolCall?.id,
+        id: config4?.toolCall?.id,
         name,
         args
       }
@@ -116169,7 +116521,7 @@ var AgentNode = class extends RunnableCallable2 {
   constructor(options) {
     super({
       name: options.name ?? "model",
-      func: (input, config6) => this.#run(input, config6)
+      func: (input, config4) => this.#run(input, config4)
     });
     this.#options = options;
     this.#systemMessage = options.systemMessage;
@@ -116205,10 +116557,10 @@ var AgentNode = class extends RunnableCallable2 {
       strategy: strategies[0]
     };
   }
-  async #run(state, config6) {
+  async #run(state, config4) {
     const lastMessage = state.messages.at(-1);
     if (lastMessage && ToolMessage.isInstance(lastMessage) && lastMessage.name && this.#options.shouldReturnDirect.has(lastMessage.name)) return [new Command({ update: { messages: [] } })];
-    const { response, lastAiMessage, collectedCommands } = await this.#invokeModel(state, config6);
+    const { response, lastAiMessage, collectedCommands } = await this.#invokeModel(state, config4);
     if (typeof response === "object" && response !== null && "structuredResponse" in response && "messages" in response) {
       const { structuredResponse, messages } = response;
       return {
@@ -116243,9 +116595,9 @@ var AgentNode = class extends RunnableCallable2 {
     if (this.#options.model) return this.#options.model;
     throw new Error("No model option was provided, either via `model` option.");
   }
-  async #invokeModel(state, config6, options = {}) {
+  async #invokeModel(state, config4, options = {}) {
     const model = await this.#deriveModel();
-    const lgConfig = config6;
+    const lgConfig = config4;
     let currentSystemMessage = this.#systemMessage;
     let lastAiMessage = null;
     const collectedCommands = [];
@@ -116254,9 +116606,9 @@ var AgentNode = class extends RunnableCallable2 {
       const structuredResponseFormat = await this.#getResponseFormat(request.model, request.responseFormat);
       const modelWithTools = await this.#bindTools(request.model, request, structuredResponseFormat);
       const messages = [...currentSystemMessage.text === "" ? [] : [currentSystemMessage], ...request.messages];
-      const signal = mergeAbortSignals(this.#options.signal, config6.signal);
+      const signal = mergeAbortSignals(this.#options.signal, config4.signal);
       const response = await raceWithSignal(modelWithTools.invoke(messages, {
-        ...config6,
+        ...config4,
         signal
       }), signal);
       lastAiMessage = response;
@@ -116545,7 +116897,7 @@ var ToolNode = class extends RunnableCallable2 {
     super({
       name,
       tags,
-      func: (state, config6) => this.run(state, config6)
+      func: (state, config4) => this.run(state, config4)
     });
     this.options = options;
     this.tools = tools2;
@@ -116577,8 +116929,8 @@ var ToolNode = class extends RunnableCallable2 {
     });
     throw error48;
   }
-  async runTool(call3, config6, state) {
-    const lgConfig = config6;
+  async runTool(call3, config4, state) {
+    const lgConfig = config4;
     const runtime = {
       context: lgConfig?.context,
       store: lgConfig?.store,
@@ -116606,11 +116958,11 @@ var ToolNode = class extends RunnableCallable2 {
           ...toolCall,
           type: "tool_call"
         }, {
-          ...config6,
-          config: config6,
+          ...config4,
+          config: config4,
           toolCallId: toolCall.id,
-          state: config6.configurable?.__pregel_scratchpad?.currentTaskInput,
-          signal: mergeAbortSignals(this.signal, config6.signal)
+          state: config4.configurable?.__pregel_scratchpad?.currentTaskInput,
+          signal: mergeAbortSignals(this.signal, config4.signal)
         });
         if (ToolMessage.isInstance(output) || isCommand(output)) return output;
         return new ToolMessage({
@@ -116649,11 +117001,11 @@ var ToolNode = class extends RunnableCallable2 {
       return this.#handleError(e, call3, false);
     }
   }
-  async run(state, config6) {
+  async run(state, config4) {
     let outputs;
     if (isSendInput(state)) {
       const { lg_tool_call: _, jumpTo: __, ...newState } = state;
-      outputs = [await this.runTool(state.lg_tool_call, config6, newState)];
+      outputs = [await this.runTool(state.lg_tool_call, config4, newState)];
     } else {
       let messages;
       if (isBaseMessageArray(state)) messages = state;
@@ -116669,7 +117021,7 @@ var ToolNode = class extends RunnableCallable2 {
         }
       }
       if (!AIMessage.isInstance(aiMessage)) throw new Error("ToolNode only accepts AIMessages as input.");
-      outputs = await Promise.all(aiMessage.tool_calls?.filter((call3) => call3.id == null || !toolMessageIds.has(call3.id)).map((call3) => this.runTool(call3, config6, state)) ?? []);
+      outputs = await Promise.all(aiMessage.tool_calls?.filter((call3) => call3.id == null || !toolMessageIds.has(call3.id)).map((call3) => this.runTool(call3, config4, state)) ?? []);
     }
     if (!outputs.some(isCommand)) return Array.isArray(state) ? outputs : { messages: outputs };
     const combinedOutputs = [];
@@ -116701,13 +117053,13 @@ var MiddlewareNode = class extends RunnableCallable2 {
     super(fields);
     this.#options = options;
   }
-  async invokeMiddleware(invokeState, config6) {
+  async invokeMiddleware(invokeState, config4) {
     let filteredContext = {};
     if (this.middleware.contextSchema) {
       const schemaShape = this.middleware.contextSchema?.shape;
       if (schemaShape) {
         const relevantContext = {};
-        const invokeContext = config6?.context || {};
+        const invokeContext = config4?.context || {};
         for (const key of Object.keys(schemaShape)) if (key in invokeContext) relevantContext[key] = invokeContext[key];
         filteredContext = interopParse(this.middleware.contextSchema, relevantContext);
       }
@@ -116719,11 +117071,11 @@ var MiddlewareNode = class extends RunnableCallable2 {
     };
     const runtime = {
       context: filteredContext,
-      store: config6?.store,
-      configurable: config6?.configurable,
-      writer: config6?.writer,
-      interrupt: config6?.interrupt,
-      signal: config6?.signal
+      store: config4?.store,
+      configurable: config4?.configurable,
+      writer: config4?.writer,
+      interrupt: config4?.interrupt,
+      signal: config4?.signal
     };
     const result = await this.runHook(
       state,
@@ -116788,7 +117140,7 @@ var BeforeAgentNode = class extends MiddlewareNode {
   constructor(middleware, options) {
     super({
       name: `BeforeAgentNode_${middleware.name}`,
-      func: async (state, config6) => this.invokeMiddleware(state, config6)
+      func: async (state, config4) => this.invokeMiddleware(state, config4)
     }, options);
     this.middleware = middleware;
   }
@@ -116807,7 +117159,7 @@ var BeforeModelNode = class extends MiddlewareNode {
   constructor(middleware, options) {
     super({
       name: `BeforeModelNode_${middleware.name}`,
-      func: async (state, config6) => this.invokeMiddleware(state, config6)
+      func: async (state, config4) => this.invokeMiddleware(state, config4)
     }, options);
     this.middleware = middleware;
   }
@@ -116826,7 +117178,7 @@ var AfterModelNode = class extends MiddlewareNode {
   constructor(middleware, options) {
     super({
       name: `AfterModelNode_${middleware.name}`,
-      func: async (state, config6) => this.invokeMiddleware(state, config6)
+      func: async (state, config4) => this.invokeMiddleware(state, config4)
     }, options);
     this.middleware = middleware;
   }
@@ -116845,7 +117197,7 @@ var AfterAgentNode = class extends MiddlewareNode {
   constructor(middleware, options) {
     super({
       name: `AfterAgentNode_${middleware.name}`,
-      func: async (state, config6) => this.invokeMiddleware(state, config6)
+      func: async (state, config4) => this.invokeMiddleware(state, config4)
     }, options);
     this.middleware = middleware;
   }
@@ -117117,8 +117469,8 @@ var ReactAgent = class ReactAgent2 {
   *   .withConfig({ tags: ["debug"] });
   * ```
   */
-  withConfig(config6) {
-    return new ReactAgent2(this.options, mergeConfigs(this.#defaultConfig, config6));
+  withConfig(config4) {
+    return new ReactAgent2(this.options, mergeConfigs(this.#defaultConfig, config4));
   }
   /**
   * Get possible edge destinations from model node.
@@ -117313,11 +117665,11 @@ var ReactAgent = class ReactAgent2 {
   /**
   * Initialize middleware states if not already present in the input state.
   */
-  async #initializeMiddlewareStates(state, config6) {
+  async #initializeMiddlewareStates(state, config4) {
     if (!this.options.middleware || this.options.middleware.length === 0 || state instanceof Command || !state) return state;
     const defaultStates = await initializeMiddlewareStates(this.options.middleware, state);
     const updatedState = {
-      ...(await this.#graph.getState(config6).catch(() => ({ values: {} }))).values,
+      ...(await this.#graph.getState(config4).catch(() => ({ values: {} }))).values,
       ...state
     };
     if (!updatedState) return updatedState;
@@ -117367,8 +117719,8 @@ var ReactAgent = class ReactAgent2 {
   * console.log(result.structuredResponse.weather); // outputs: "It's sunny and 75°F."
   * ```
   */
-  async invoke(state, config6) {
-    const mergedConfig = mergeConfigs(this.#defaultConfig, config6);
+  async invoke(state, config4) {
+    const mergedConfig = mergeConfigs(this.#defaultConfig, config4);
     const initializedState = await this.#initializeMiddlewareStates(state, mergedConfig);
     return this.#graph.invoke(initializedState, mergedConfig);
   }
@@ -117414,8 +117766,8 @@ var ReactAgent = class ReactAgent2 {
   * }
   * ```
   */
-  async stream(state, config6) {
-    const mergedConfig = mergeConfigs(this.#defaultConfig, config6);
+  async stream(state, config4) {
+    const mergedConfig = mergeConfigs(this.#defaultConfig, config4);
     const initializedState = await this.#initializeMiddlewareStates(state, mergedConfig);
     return this.#graph.stream(initializedState, mergedConfig);
   }
@@ -117455,30 +117807,30 @@ var ReactAgent = class ReactAgent2 {
   /**
   * @internal
   */
-  streamEvents(state, config6, streamOptions) {
-    const mergedConfig = mergeConfigs(this.#defaultConfig, config6);
+  streamEvents(state, config4, streamOptions) {
+    const mergedConfig = mergeConfigs(this.#defaultConfig, config4);
     return this.#graph.streamEvents(state, {
       ...mergedConfig,
-      version: config6?.version ?? "v2"
+      version: config4?.version ?? "v2"
     }, streamOptions);
   }
   /**
   * @internal
   */
-  getGraphAsync(config6) {
-    return this.#graph.getGraphAsync(config6);
+  getGraphAsync(config4) {
+    return this.#graph.getGraphAsync(config4);
   }
   /**
   * @internal
   */
-  getState(config6, options) {
-    return this.#graph.getState(config6, options);
+  getState(config4, options) {
+    return this.#graph.getState(config4, options);
   }
   /**
   * @internal
   */
-  getStateHistory(config6, options) {
-    return this.#graph.getStateHistory(config6, options);
+  getStateHistory(config4, options) {
+    return this.#graph.getStateHistory(config4, options);
   }
   /**
   * @internal
@@ -117981,7 +118333,7 @@ var safeJSON = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION3 = "6.33.0";
+var VERSION4 = "6.33.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -118009,7 +118361,7 @@ var getPlatformProperties = () => {
   if (detectedPlatform === "deno") {
     return {
       "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION3,
+      "X-Stainless-Package-Version": VERSION4,
       "X-Stainless-OS": normalizePlatform(Deno.build.os),
       "X-Stainless-Arch": normalizeArch(Deno.build.arch),
       "X-Stainless-Runtime": "deno",
@@ -118019,7 +118371,7 @@ var getPlatformProperties = () => {
   if (typeof EdgeRuntime !== "undefined") {
     return {
       "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION3,
+      "X-Stainless-Package-Version": VERSION4,
       "X-Stainless-OS": "Unknown",
       "X-Stainless-Arch": `other:${EdgeRuntime}`,
       "X-Stainless-Runtime": "edge",
@@ -118029,7 +118381,7 @@ var getPlatformProperties = () => {
   if (detectedPlatform === "node") {
     return {
       "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION3,
+      "X-Stainless-Package-Version": VERSION4,
       "X-Stainless-OS": normalizePlatform(globalThis.process.platform ?? "unknown"),
       "X-Stainless-Arch": normalizeArch(globalThis.process.arch ?? "unknown"),
       "X-Stainless-Runtime": "node",
@@ -118040,7 +118392,7 @@ var getPlatformProperties = () => {
   if (browserInfo) {
     return {
       "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": VERSION3,
+      "X-Stainless-Package-Version": VERSION4,
       "X-Stainless-OS": "Unknown",
       "X-Stainless-Arch": "unknown",
       "X-Stainless-Runtime": `browser:${browserInfo.browser}`,
@@ -118049,7 +118401,7 @@ var getPlatformProperties = () => {
   }
   return {
     "X-Stainless-Lang": "js",
-    "X-Stainless-Package-Version": VERSION3,
+    "X-Stainless-Package-Version": VERSION4,
     "X-Stainless-OS": "Unknown",
     "X-Stainless-Arch": "unknown",
     "X-Stainless-Runtime": "unknown",
@@ -124394,7 +124746,7 @@ var OpenAI = class {
     return stringifyQuery(query);
   }
   getUserAgent() {
-    return `${this.constructor.name}/JS ${VERSION3}`;
+    return `${this.constructor.name}/JS ${VERSION4}`;
   }
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid42()}`;
@@ -124579,8 +124931,8 @@ var OpenAI = class {
     const request = this.makeRequest(options, null, void 0);
     return new PagePromise(this, request, Page2);
   }
-  async fetchWithTimeout(url3, init, ms, controller) {
-    const { signal, method, ...options } = init || {};
+  async fetchWithTimeout(url3, init4, ms, controller) {
+    const { signal, method, ...options } = init4 || {};
     const abort = this._makeAbort(controller);
     if (signal)
       signal.addEventListener("abort", abort, { once: true });
@@ -124848,8 +125200,8 @@ function _modelPrefersResponsesAPI(model) {
 
 // node_modules/@langchain/openai/dist/utils/azure.js
 init_env();
-function getEndpoint(config6) {
-  const { azureOpenAIApiDeploymentName, azureOpenAIApiInstanceName, azureOpenAIApiKey, azureOpenAIBasePath, baseURL, azureADTokenProvider, azureOpenAIEndpoint } = config6;
+function getEndpoint(config4) {
+  const { azureOpenAIApiDeploymentName, azureOpenAIApiInstanceName, azureOpenAIApiKey, azureOpenAIBasePath, baseURL, azureADTokenProvider, azureOpenAIEndpoint } = config4;
   if ((azureOpenAIApiKey || azureADTokenProvider) && azureOpenAIBasePath && azureOpenAIApiDeploymentName) return `${azureOpenAIBasePath}/${azureOpenAIApiDeploymentName}`;
   if ((azureOpenAIApiKey || azureADTokenProvider) && azureOpenAIEndpoint && azureOpenAIApiDeploymentName) return `${azureOpenAIEndpoint}/openai/deployments/${azureOpenAIApiDeploymentName}`;
   if (azureOpenAIApiKey || azureADTokenProvider) {
@@ -127770,8 +128122,8 @@ var BaseChatOpenAI = class extends BaseChatModel {
     return PROFILES[this.model] ?? {};
   }
   /** @internal */
-  _getStructuredOutputMethod(config6) {
-    const ensuredConfig = { ...config6 };
+  _getStructuredOutputMethod(config4) {
+    const ensuredConfig = { ...config4 };
     if (!this.model.startsWith("gpt-3") && !this.model.startsWith("gpt-4-") && this.model !== "gpt-4") {
       if (ensuredConfig?.method === void 0) return "jsonSchema";
     } else if (ensuredConfig.method === "jsonSchema") console.warn(`[WARNING]: JSON Schema is not supported for model "${this.model}". Falling back to tool calling.`);
@@ -127796,15 +128148,15 @@ var BaseChatOpenAI = class extends BaseChatModel {
   * @param config - The structured output method options.
   * @returns The model with structured output.
   */
-  withStructuredOutput(outputSchema, config6) {
+  withStructuredOutput(outputSchema, config4) {
     let llm;
     let outputParser;
     const { schema, name, includeRaw } = {
-      ...config6,
+      ...config4,
       schema: outputSchema
     };
-    if (config6?.strict !== void 0 && config6.method === "jsonMode") throw new Error("Argument `strict` is only supported for `method` = 'function_calling'");
-    const method = getStructuredOutputMethod(this.model, config6?.method);
+    if (config4?.strict !== void 0 && config4.method === "jsonMode") throw new Error("Argument `strict` is only supported for `method` = 'function_calling'");
+    const method = getStructuredOutputMethod(this.model, config4?.method);
     if (method === "jsonMode") {
       outputParser = createContentParser(schema);
       const asJsonSchema = toJsonSchema(schema);
@@ -127825,7 +128177,7 @@ var BaseChatOpenAI = class extends BaseChatModel {
         name: name ?? "extract",
         description: getSchemaDescription(asJsonSchema),
         schema: isInteropZodSchema(schema) ? schema : asJsonSchema,
-        strict: config6?.strict
+        strict: config4?.strict
       };
       llm = this.withConfig({
         outputVersion: "v0",
@@ -127886,7 +128238,7 @@ var BaseChatOpenAI = class extends BaseChatModel {
             ...asJsonSchema
           }
         },
-        ...config6?.strict !== void 0 ? { strict: config6.strict } : {}
+        ...config4?.strict !== void 0 ? { strict: config4.strict } : {}
       });
       outputParser = createFunctionCallingParser(schema, functionName);
     }
@@ -129466,11 +129818,11 @@ var ChatOpenAI = class ChatOpenAI2 extends BaseChatOpenAI {
     }
     yield* this.completions._streamResponseChunks(messages, this._combineCallOptions(options), runManager);
   }
-  withConfig(config6) {
+  withConfig(config4) {
     const newModel = new ChatOpenAI2(this.fields);
     newModel.defaultOptions = {
       ...this.defaultOptions,
-      ...config6
+      ...config4
     };
     return newModel;
   }
@@ -129627,6 +129979,7 @@ var Person = class {
     this.id = void 0;
     this.name = void 0;
     this.known_for_department = void 0;
+    this.biography = void 0;
     this.popularity = void 0;
     this.character = void 0;
     this.profile_path = void 0;
@@ -129635,6 +129988,7 @@ var Person = class {
       this.id = object2.id;
       this.name = object2.name;
       this.known_for_department = object2.known_for_department;
+      this.biography = object2.biography;
       this.popularity = object2.popularity;
       this.character = object2.character;
       this.profile_path = object2.profile_path;
@@ -129876,7 +130230,9 @@ var MovieFetch = class {
   async handle(keys, model) {
     if (keys.includes("movie.poster" /* POSTER */)) {
       import_assert4.default.ok(model.posterPath);
-      model.poster = await getMoviePosterByPath(model.posterPath);
+      model.poster = await getMoviePosterByPath(
+        model.posterPath
+      );
     }
     return model;
   }
@@ -129885,10 +130241,12 @@ var MovieFetch = class {
 // src/repositories/movie.repository.ts
 async function save(model) {
   const query = "INSERT INTO `random_movie_db`.`movies` (       `external_id`,    `title`,    `original_title`,    `poster_path` ) VALUES (?,?,?,?);";
-  const result = await doExecute(
-    query,
-    [model.externalId, model.title, model.originalTitle, model.posterPath]
-  );
+  const result = await doExecute(query, [
+    model.externalId,
+    model.title,
+    model.originalTitle,
+    model.posterPath
+  ]);
   model.id = result[0].insertId;
   return model;
 }
@@ -129913,17 +130271,16 @@ async function findByCriteria(criteria) {
     query += ` AND movie.backdrop_path = '${criteria.backdropPath}'`;
   }
   query += ";";
-  const queryResult = await doExecute(
-    query,
-    []
+  const queryResult = await doExecute(query, []);
+  return Promise.all(
+    queryResult[0].map(async (res) => {
+      let model = Movie.fromResultSet(res);
+      if (criteria.fetch != null) {
+        model = await new MovieFetch().handle(criteria.fetch, model);
+      }
+      return model;
+    })
   );
-  return Promise.all(queryResult[0].map(async (res) => {
-    let model = Movie.fromResultSet(res);
-    if (criteria.fetch != null) {
-      model = await new MovieFetch().handle(criteria.fetch, model);
-    }
-    return model;
-  }));
 }
 async function findMoviesToWatchLaterByUserId(userId) {
   let query = "SELECT movie_id FROM `random_movie_db`.`user_movies_to_watch_later` WHERE user_id = ?;";
@@ -129941,18 +130298,12 @@ async function findMoviesToWatchLaterByUserId(userId) {
 async function addMovieToWatchLater(userId, movieId) {
   const query = "INSERT INTO `random_movie_db`.`user_movies_to_watch_later` (    `user_id`,    `movie_id` ) VALUES (?, ?);";
   SqlCache.getInstance().clearCache("userMoviesToWatchLater" /* USER_MOVIES_TO_WATCH_LATER */);
-  await doExecute(
-    query,
-    [userId, movieId]
-  );
+  await doExecute(query, [userId, movieId]);
 }
 async function removeMovieFromToWatchLaterByMovieId(movieId) {
   const query = "DELETE FROM `random_movie_db`.`user_movies_to_watch_later` WHERE movie_id = ?";
   SqlCache.getInstance().clearCache("userMoviesToWatchLater" /* USER_MOVIES_TO_WATCH_LATER */);
-  await doExecute(
-    query,
-    [movieId]
-  );
+  await doExecute(query, [movieId]);
 }
 async function findIgnoredMoviesByUserId(userId) {
   let query = "SELECT movie_id FROM `random_movie_db`.`user_ignored_movies` WHERE user_id = ?;";
@@ -129970,18 +130321,12 @@ async function findIgnoredMoviesByUserId(userId) {
 async function addMovieToIgnore(userId, movieId) {
   const query = "INSERT INTO `random_movie_db`.`user_ignored_movies` (    `user_id`,    `movie_id` ) VALUES (?, ?);";
   SqlCache.getInstance().clearCache("userIgnoredMovies" /* USER_IGNORED_MOVIES */);
-  await doExecute(
-    query,
-    [userId, movieId]
-  );
+  await doExecute(query, [userId, movieId]);
 }
 async function removeMovieToIgnoreByMovieId(movieId) {
   const query = "DELETE FROM `random_movie_db`.`user_ignored_movies` WHERE movie_id = ?";
   SqlCache.getInstance().clearCache("userIgnoredMovies" /* USER_IGNORED_MOVIES */);
-  await doExecute(
-    query,
-    [movieId]
-  );
+  await doExecute(query, [movieId]);
 }
 
 // src/criterias/movie.criteria.ts
@@ -130237,29 +130582,49 @@ var MovieProvidersResponse = class {
 };
 
 // src/clients/tmdb/the-movie-db.client.ts
-var AUTH = process.env.TMDB_KEY;
 async function getMovieWatchProviders(id) {
   import_assert6.default.ok(id);
-  const response = await axios_default.get(`https://api.themoviedb.org/3/movie/${id}/watch/providers`, {
-    params: {
-      language: CurrentSession.getInstance().language
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "accept": "application/json"
+  const response = await axios_default.get(
+    `https://api.themoviedb.org/3/movie/${id}/watch/providers`,
+    {
+      params: {
+        language: CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        accept: "application/json"
+      }
     }
-  });
+  );
   return new WatchProvidersResponse(response.data);
 }
 async function discoverMovie(params) {
-  const response = await axios_default.get("https://api.themoviedb.org/3/discover/movie", {
-    params,
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    "https://api.themoviedb.org/3/discover/movie",
+    {
+      params,
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   return new DiscoverMovieResponse(response.data);
+}
+async function searchPersonById(id) {
+  const response = await axios_default.get(
+    `https://api.themoviedb.org/3/search/person/${id}`,
+    {
+      params: {
+        language: CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
+    }
+  );
+  return new Person(response.data);
 }
 async function searchPerson(name, page, role) {
   const criteria = new SearchCriteria();
@@ -130284,17 +130649,20 @@ async function searchPerson(name, page, role) {
   };
 }
 async function searchPersonByCriteria(criteria) {
-  const response = await axios_default.get("https://api.themoviedb.org/3/search/person", {
-    params: {
-      query: criteria.name,
-      page: criteria.page,
-      language: CurrentSession.getInstance().language
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    "https://api.themoviedb.org/3/search/person",
+    {
+      params: {
+        query: criteria.name,
+        page: criteria.page,
+        language: CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   return new SearchPersonResponse(response.data);
 }
 async function searchDirectorMovieIds(id) {
@@ -130307,28 +130675,34 @@ async function searchDirectorMovieIds(id) {
   return result;
 }
 async function searchPersonMovieCredits(id) {
-  const response = await axios_default.get(`https://api.themoviedb.org/3/person/${id}/movie_credits`, {
-    params: {
-      language: CurrentSession.getInstance().language
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    `https://api.themoviedb.org/3/person/${id}/movie_credits`,
+    {
+      params: {
+        language: CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   return new PersonMovieCreditsResponse(response.data);
 }
 async function getMovieCredits(id) {
   import_assert6.default.ok(id);
-  const response = await axios_default.get(`https://api.themoviedb.org/3/movie/${id}/credits`, {
-    params: {
-      language: CurrentSession.getInstance().language
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    `https://api.themoviedb.org/3/movie/${id}/credits`,
+    {
+      params: {
+        language: CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   return new MovieCreditsResponse(response.data);
 }
 async function getMovieDetails(id, lang) {
@@ -130338,8 +130712,8 @@ async function getMovieDetails(id, lang) {
       language: lang ?? CurrentSession.getInstance().language
     },
     headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+      Authorization: "Bearer " + TMDB_AUTH_KEY,
+      Accept: "application/json"
     }
   });
   return new TheMovieDbMovie(response.data);
@@ -130367,51 +130741,64 @@ async function doSearchKeywords(name, page) {
   };
 }
 async function doSearchKeywordsByCriteria(criteria) {
-  const response = await axios_default.get("https://api.themoviedb.org/3/search/keyword", {
-    params: {
-      query: criteria.name,
-      page: criteria.page,
-      language: CurrentSession.getInstance().language
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    "https://api.themoviedb.org/3/search/keyword",
+    {
+      params: {
+        query: criteria.name,
+        page: criteria.page,
+        language: CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   return new SearchKeywordResponse(response.data);
 }
 async function getMovieVideos(id, lang) {
   import_assert6.default.ok(id);
-  const response = await axios_default.get(`https://api.themoviedb.org/3/movie/${id}/videos`, {
-    params: {
-      language: lang ?? CurrentSession.getInstance().language
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    `https://api.themoviedb.org/3/movie/${id}/videos`,
+    {
+      params: {
+        language: lang ?? CurrentSession.getInstance().language
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   return new MovieVideosResponse(response.data);
 }
 async function getMoviePosterByPath(path3) {
   import_assert6.default.ok(path3);
-  const response = await axios_default.get(`https://image.tmdb.org/t/p/w600_and_h900_bestv2/${path3}`, {
-    responseType: "arraybuffer",
-    headers: {
-      "Accept": "image/*"
+  const response = await axios_default.get(
+    `https://image.tmdb.org/t/p/w600_and_h900_bestv2/${path3}`,
+    {
+      responseType: "arraybuffer",
+      headers: {
+        Accept: "image/*"
+      }
     }
-  });
+  );
   const result = Buffer.from(response.data, "binary").toString("base64");
   return `data:image/png;base64,${result}`;
 }
 async function findMovie(params, ids = []) {
   let result = void 0;
   const response = await discoverMovie(params);
-  response.results = response.results.filter((i) => !ids.length || ids.includes(i.id));
+  response.results = response.results.filter(
+    (i) => !ids.length || ids.includes(i.id)
+  );
   if (response.results.length > 0) {
     const userId = CurrentSession.getInstance().getUserId();
     if (userId) {
-      const ignoredMovieIds = await getUserIgnoredMovies(userId).then((res) => res.map((i) => i.externalId));
+      const ignoredMovieIds = await getUserIgnoredMovies(userId).then(
+        (res) => res.map((i) => i.externalId)
+      );
       for (const _movie of response.results) {
         if (!ignoredMovieIds.includes(_movie.id)) {
           result = _movie;
@@ -130426,19 +130813,25 @@ async function findMovie(params, ids = []) {
 }
 async function getCountryProviders(country, lang) {
   import_assert6.default.ok(country);
-  const response = await axios_default.get(`https://api.themoviedb.org/3/watch/providers/movie`, {
-    params: {
-      language: lang ?? CurrentSession.getInstance().language,
-      watch_region: country
-      // ISO 3166-1 alpha-2
-    },
-    headers: {
-      "Authorization": "Bearer " + AUTH,
-      "Accept": "application/json"
+  const response = await axios_default.get(
+    `https://api.themoviedb.org/3/watch/providers/movie`,
+    {
+      params: {
+        language: lang ?? CurrentSession.getInstance().language,
+        watch_region: country
+        // ISO 3166-1 alpha-2
+      },
+      headers: {
+        Authorization: "Bearer " + TMDB_AUTH_KEY,
+        Accept: "application/json"
+      }
     }
-  });
+  );
   const data = new MovieProvidersResponse(response.data);
-  return data.results?.map((p) => ({ id: p.provider_id, name: p.provider_name })) ?? [];
+  return data.results?.map((p) => ({
+    id: p.provider_id,
+    name: p.provider_name
+  })) ?? [];
 }
 function filterPersons(persons, by) {
   return persons.filter((person) => person.known_for_department === by).filter((person) => person.popularity && person.popularity > 0.5).sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
@@ -130450,30 +130843,44 @@ init_external2();
 
 // src/ai/zod.schemas.ts
 var SearchQuerySchema = external_exports2.object({
-  name: external_exports2.string().trim().min(3, "The search term must be at least 3 characters long.").describe("The search term or keyword for querying; must be at least 3 characters."),
-  page: external_exports2.number().int().positive().default(1).describe("The page number to retrieve, used for pagination (defaults to 1).")
+  name: external_exports2.string().trim().min(3, "The search term must be at least 3 characters long.").describe(
+    "The search term or keyword for querying; must be at least 3 characters."
+  ),
+  page: external_exports2.number().int().positive().default(1).describe(
+    "The page number to retrieve, used for pagination (defaults to 1)."
+  )
 });
-SearchQuerySchema.describe("Schema for validating search queries with pagination support.");
+SearchQuerySchema.describe(
+  "Schema for validating search queries with pagination support."
+);
 
 // src/ai/agent.tools.ts
 var get_director = tool$1(
   async (input) => {
     try {
-      if (IS_DEBUG) {
+      if (DEBUG) {
         console.log(`[DEBUG] Director request: ` + JSON.stringify(input));
       }
-      const response = await searchPerson(input.name, input.page, "Directing");
-      if (IS_DEBUG) {
+      const response = await searchPerson(
+        input.name,
+        input.page,
+        "Directing"
+      );
+      if (DEBUG) {
         console.log(`[DEBUG] Director response: ` + JSON.stringify(response));
       }
-      const data = response.data.sort(sortByPopularityDesc).map((i) => ({
-        id: i.id,
-        name: i.name
-      }));
+      const data = response.data.sort(sortByPopularityDesc).map(
+        (i) => ({
+          id: i.id,
+          name: i.name
+        })
+      );
       return JSON.stringify(data);
     } catch (e) {
       console.error("[Agent-AI] Error fetching director's ID:", e);
-      throw new Error(`Failed to fetch director for input: ${input.name}, page: ${input.page}`);
+      throw new Error(
+        `Failed to fetch director for input: ${input.name}, page: ${input.page}`
+      );
     }
   },
   {
@@ -130485,21 +130892,29 @@ var get_director = tool$1(
 var get_actor = tool$1(
   async (input) => {
     try {
-      if (IS_DEBUG) {
+      if (DEBUG) {
         console.log(`[DEBUG] Actor request: ` + JSON.stringify(input));
       }
-      const response = await searchPerson(input.name, input.page, "Acting");
-      if (IS_DEBUG) {
+      const response = await searchPerson(
+        input.name,
+        input.page,
+        "Acting"
+      );
+      if (DEBUG) {
         console.log(`[DEBUG] Actor response: ` + JSON.stringify(response));
       }
-      const data = response.data.sort(sortByPopularityDesc).map((i) => ({
-        id: i.id,
-        name: i.name
-      }));
+      const data = response.data.sort(sortByPopularityDesc).map(
+        (i) => ({
+          id: i.id,
+          name: i.name
+        })
+      );
       return JSON.stringify(data);
     } catch (e) {
       console.error("[Agent-AI] Error fetching actor's ID:", e);
-      throw new Error(`Failed to fetch actor for input: ${input.name}, page: ${input.page}`);
+      throw new Error(
+        `Failed to fetch actor for input: ${input.name}, page: ${input.page}`
+      );
     }
   },
   {
@@ -130511,18 +130926,25 @@ var get_actor = tool$1(
 var get_keyword = tool$1(
   async (input) => {
     try {
-      if (IS_DEBUG) {
+      if (DEBUG) {
         console.log(`[DEBUG] Keyword request: ` + JSON.stringify(input));
       }
-      const response = await doSearchKeywords(input.name, input.page);
-      if (IS_DEBUG) {
+      const response = await doSearchKeywords(
+        input.name,
+        input.page
+      );
+      if (DEBUG) {
         console.log(`[DEBUG] Keyword response: ` + JSON.stringify(response));
       }
-      const data = response.data.map((i) => ({ id: i.id, name: i.name }));
+      const data = response.data.map(
+        (i) => ({ id: i.id, name: i.name })
+      );
       return JSON.stringify(data);
     } catch (e) {
       console.error("[Agent-AI] Error fetching keyword:", e);
-      throw new Error(`Failed to fetch keyword for input: ${input.name}, page: ${input.page}`);
+      throw new Error(
+        `Failed to fetch keyword for input: ${input.name}, page: ${input.page}`
+      );
     }
   },
   {
@@ -130532,15 +130954,19 @@ var get_keyword = tool$1(
   }
 );
 var get_providers = tool$1(
-  async (_, config6) => {
-    const country = config6.context.country;
+  async (_, config4) => {
+    const country = config4.context.country;
     try {
-      if (IS_DEBUG) {
-        console.log(`[DEBUG] Country providers request: ` + JSON.stringify(country));
+      if (DEBUG) {
+        console.log(
+          `[DEBUG] Country providers request: ` + JSON.stringify(country)
+        );
       }
       const response = await getCountryProviders(country);
-      if (IS_DEBUG) {
-        console.log(`[DEBUG] Country providers response: ` + JSON.stringify(country));
+      if (DEBUG) {
+        console.log(
+          `[DEBUG] Country providers response: ` + JSON.stringify(country)
+        );
       }
       return JSON.stringify(response);
     } catch (e) {
@@ -130573,16 +130999,16 @@ async function readFileAsyncUTF8(filePath) {
 }
 
 // src/configs/langchain.config.ts
-var CHAT_GPT_API_KEY = process.env.CHAT_GPT_API_KEY;
-var PROMPT_PATH = process.env.AI_PROMPT_FILE_PATH;
 var agent = void 0;
 var prompt = void 0;
-function config5() {
-  if (PROMPT_PATH === void 0) {
-    console.log("AI prompt path is not configured.");
+function config3() {
+  if (AI_PROMPT_FILE_PATH === void 0) {
+    console.log("AI-Agent prompt path is not configured.");
     return;
   }
-  readFileAsyncUTF8(PROMPT_PATH).then((file2) => prompt = file2);
+  readFileAsyncUTF8(AI_PROMPT_FILE_PATH).then(
+    (file2) => prompt = file2
+  );
   agent = createAgent({
     model: new ChatOpenAI({ model: "gpt-5.4", apiKey: CHAT_GPT_API_KEY }),
     tools: [get_director, get_actor, get_keyword, get_providers]
@@ -130637,19 +131063,17 @@ var Token = class _Token {
 // src/repositories/token.repository.ts
 async function save3(model) {
   const query = "INSERT INTO `random_movie_db`.`tokens` (    `uuid` ) VALUES (?);";
-  const result = await doExecute(
-    query,
-    [model.uuid]
-  );
+  const result = await doExecute(query, [model.uuid]);
   model.id = result[0].insertId;
   return model;
 }
 async function update(model) {
   const query = "UPDATE `random_movie_db`.`tokens` SET consumed = ?, consumed_datetime = ? WHERE id = ?";
-  const result = await doExecute(
-    query,
-    [model.consumed, model.consumedDatetime, model.id]
-  );
+  const result = await doExecute(query, [
+    model.consumed,
+    model.consumedDatetime,
+    model.id
+  ]);
   return model;
 }
 async function findByCriteria3(criteria) {
@@ -130664,10 +131088,7 @@ async function findByCriteria3(criteria) {
     query += ` AND tok.consumed = ${criteria.consumed}`;
   }
   query += ";";
-  const queryResult = await doExecute(
-    query,
-    []
-  );
+  const queryResult = await doExecute(query, []);
   return queryResult[0].map((res) => Token.fromResultSet(res));
 }
 
@@ -130731,19 +131152,23 @@ var CredentialFetch = class {
 // src/repositories/credential.repository.ts
 async function save4(model) {
   const query = "INSERT INTO `random_movie_db`.`credentials` (    `email`,    `password`,    `token_id` ) VALUES (?, ?, ?);";
-  const result = await doExecute(
-    query,
-    [model.email, model.password, model.token?.id]
-  );
+  const result = await doExecute(query, [
+    model.email,
+    model.password,
+    model.token?.id
+  ]);
   model.id = result[0].insertId;
   return model;
 }
 async function update2(model) {
   const query = "UPDATE `random_movie_db`.`credentials` SET  `email` = ?, `password` = ?, `enabled` = ? WHERE `id` = ?;";
-  await doExecute(
-    query,
-    [model.email, model.password, , model.enabled, model.id]
-  );
+  await doExecute(query, [
+    model.email,
+    model.password,
+    ,
+    model.enabled,
+    model.id
+  ]);
   return model;
 }
 async function findByCriteria4(criteria) {
@@ -130761,17 +131186,16 @@ async function findByCriteria4(criteria) {
     query += ` AND cred.enabled = ${criteria.enabled}`;
   }
   query += ";";
-  const queryResult = await doExecute(
-    query,
-    []
+  const queryResult = await doExecute(query, []);
+  return Promise.all(
+    queryResult[0].map(async (res) => {
+      let model = Credential.fromResultSet(res);
+      if (criteria.fetch != null) {
+        model = await new CredentialFetch().handle(criteria.fetch, model);
+      }
+      return model;
+    })
   );
-  return Promise.all(queryResult[0].map(async (res) => {
-    let model = Credential.fromResultSet(res);
-    if (criteria.fetch != null) {
-      model = await new CredentialFetch().handle(criteria.fetch, model);
-    }
-    return model;
-  }));
 }
 
 // src/services/credential.service.ts
@@ -130870,8 +131294,8 @@ var User = class _User {
       this.credential = object2.credential != null ? new Credential(object2.credential) : void 0;
       this.insertDatetime = object2.insertDatetime != null ? new Date(object2.insertDatetime) : void 0;
       this.deleted = numberToBoolean(object2.deleted);
-      this.moviesToWatchLater = object2.moviesToWatchLater != null ? object2.moviesToWatchLater.map(((i) => new Movie(i))) : void 0;
-      this.ignoredMovies = object2.ignoredMovies != null ? object2.ignoredMovies.map(((i) => new Movie(i))) : void 0;
+      this.moviesToWatchLater = object2.moviesToWatchLater != null ? object2.moviesToWatchLater.map((i) => new Movie(i)) : void 0;
+      this.ignoredMovies = object2.ignoredMovies != null ? object2.ignoredMovies.map((i) => new Movie(i)) : void 0;
     }
   }
   static fromResultSet(rs) {
@@ -130901,7 +131325,9 @@ var UserFetch = class {
     }
     if (keys.includes("user.movies_to_watch_later" /* MOVIES_TO_WATCH_LATER */)) {
       import_assert9.default.ok(model.id);
-      model.moviesToWatchLater = await getUserMoviesToWatchLater(model.id);
+      model.moviesToWatchLater = await getUserMoviesToWatchLater(
+        model.id
+      );
     }
     if (keys.includes("user.ignored_movie" /* IGNORED_MOVIES */)) {
       import_assert9.default.ok(model.id);
@@ -130914,19 +131340,20 @@ var UserFetch = class {
 // src/repositories/user.repository.ts
 async function save7(model) {
   const query = "INSERT INTO `random_movie_db`.`users` (       `display_name`,    `credential_id` ) VALUES (?,?);";
-  const result = await doExecute(
-    query,
-    [model.displayName, model.credential?.id]
-  );
+  const result = await doExecute(query, [
+    model.displayName,
+    model.credential?.id
+  ]);
   model.id = result[0].insertId;
   return model;
 }
 async function update4(model) {
   let query = "UPDATE `random_movie_db`.`users` SET `display_name` = ?, `deleted` = ? WHERE `id` = ?;";
-  const queryResult = await doExecute(
-    query,
-    [model.displayName, model.deleted, model.id]
-  );
+  const queryResult = await doExecute(query, [
+    model.displayName,
+    model.deleted,
+    model.id
+  ]);
   return model;
 }
 async function findByCriteria7(criteria) {
@@ -130941,17 +131368,16 @@ async function findByCriteria7(criteria) {
     query += ` AND usr.credential_id = ${criteria.credentialId}`;
   }
   query += ";";
-  const queryResult = await doExecute(
-    query,
-    []
+  const queryResult = await doExecute(query, []);
+  return Promise.all(
+    queryResult[0].map(async (res) => {
+      let model = User.fromResultSet(res);
+      if (criteria.fetch != null) {
+        model = await new UserFetch().handle(criteria.fetch, model);
+      }
+      return model;
+    })
   );
-  return Promise.all(queryResult[0].map(async (res) => {
-    let model = User.fromResultSet(res);
-    if (criteria.fetch != null) {
-      model = await new UserFetch().handle(criteria.fetch, model);
-    }
-    return model;
-  }));
 }
 
 // src/criterias/user.criteria.ts
@@ -132768,9 +133194,9 @@ var authFilter = (req, res, next) => {
       res.sendStatus(403);
       return;
     }
-    const _session = req.session;
-    _session.userId = decoded.userId;
-    CurrentSession.getInstance().session = _session;
+    const _session2 = req.session;
+    _session2.userId = decoded.userId;
+    CurrentSession.getInstance().session = _session2;
     next();
   });
 };
@@ -132936,8 +133362,8 @@ var UserDto = class {
       this.id = object2.id;
       this.displayName = object2.displayName;
       this.credential = object2.credential != null ? new CredentialDto(object2.credential) : void 0;
-      this.moviesToWatchLater = object2.moviesToWatchLater != null ? object2.moviesToWatchLater.map(((i) => new MovieDto(i))) : void 0;
-      this.ignoredMovies = object2.ignoredMovies != null ? object2.ignoredMovies.map(((i) => new MovieDto(i))) : void 0;
+      this.moviesToWatchLater = object2.moviesToWatchLater != null ? object2.moviesToWatchLater.map((i) => new MovieDto(i)) : void 0;
+      this.ignoredMovies = object2.ignoredMovies != null ? object2.ignoredMovies.map((i) => new MovieDto(i)) : void 0;
     }
   }
 };
@@ -132961,8 +133387,12 @@ function toDto3(model) {
 }
 
 // src/utils/validator.utils.ts
-var EMAIL_REGEX = new RegExp("^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$");
-var PASSWORD_REGEX = new RegExp("^[a-zA-Z0-9!@#$%^&*()_+=.-]+$");
+var EMAIL_REGEX = new RegExp(
+  "^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
+);
+var PASSWORD_REGEX = new RegExp(
+  "^[a-zA-Z0-9!@#$%^&*()_+=.-]+$"
+);
 function notExists(obj) {
   return obj == null;
 }
@@ -133012,7 +133442,6 @@ function interceptor(req, res, next) {
   const language = req.headers["x-session-lang"];
   currentSession.session.language = language ?? void 0;
   if (req.method !== "OPTIONS") {
-    console.log(`${req.method} ${req.url}`);
   }
   next();
 }
@@ -133021,15 +133450,25 @@ function interceptor(req, res, next) {
 var import_http_status_codes = __toESM(require_cjs());
 var PATH = "auth";
 function setup() {
-  app.get(`/${PATH}/protected`, authFilter, asyncHandler(async (req, res) => {
-    res.json("You have access to this protected route!");
-  }));
-  app.post(`/${PATH}/login`, asyncHandler(async (req, res) => {
-    const login2 = new LoginDto(req.body);
-    validate8(login2);
-    const token = await login(toModel(login2), req);
-    res.send(token);
-  }));
+  app.get(
+    `/${PATH}/protected`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      res.json("You have access to this protected route!");
+    })
+  );
+  app.post(
+    `/${PATH}/login`,
+    asyncHandler(async (req, res) => {
+      const login2 = new LoginDto(req.body);
+      validate8(login2);
+      const token = await login(
+        toModel(login2),
+        req
+      );
+      res.send(token);
+    })
+  );
   app.post(`/${PATH}/logout`, (req, res) => {
     req.session.destroy((err) => {
       if (err != null) {
@@ -133038,29 +133477,42 @@ function setup() {
       res.sendStatus(import_http_status_codes.StatusCodes.OK);
     });
   });
-  app.post(`/${PATH}/signup`, asyncHandler(async (req, res) => {
-    const signup2 = new SignupDto(req.body);
-    signup2.displayName = normalizeWhitespace(signup2.displayName);
-    validate7(signup2);
-    const user = await signup(toModel2(signup2));
-    res.json(toDto3(user));
-  }));
-  app.post(`/${PATH}/reset-password`, authFilter, asyncHandler(async (req, res) => {
-    const userId = req.session.userId;
-    import_assert12.default.ok(userId);
-    await resetPassword(userId, req.body.password);
-    res.send();
-  }));
-  app.get(`/${PATH}/check-email/:email`, asyncHandler(async (req, res) => {
-    const email3 = req.params["email"];
-    import_assert12.default.ok(email3);
-    res.send(await checkEmail(email3));
-  }));
-  app.get(`/${PATH}/check-username/:username`, asyncHandler(async (req, res) => {
-    const username = req.params["username"];
-    import_assert12.default.ok(username);
-    res.send(await checkUsername(username));
-  }));
+  app.post(
+    `/${PATH}/signup`,
+    asyncHandler(async (req, res) => {
+      const signup2 = new SignupDto(req.body);
+      signup2.displayName = normalizeWhitespace(signup2.displayName);
+      validate7(signup2);
+      const user = await signup(toModel2(signup2));
+      res.json(toDto3(user));
+    })
+  );
+  app.post(
+    `/${PATH}/reset-password`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const userId = req.session.userId;
+      import_assert12.default.ok(userId);
+      await resetPassword(userId, req.body.password);
+      res.send();
+    })
+  );
+  app.get(
+    `/${PATH}/check-email/:email`,
+    asyncHandler(async (req, res) => {
+      const email3 = req.params["email"];
+      import_assert12.default.ok(email3);
+      res.send(await checkEmail(email3));
+    })
+  );
+  app.get(
+    `/${PATH}/check-username/:username`,
+    asyncHandler(async (req, res) => {
+      const username = req.params["username"];
+      import_assert12.default.ok(username);
+      res.send(await checkUsername(username));
+    })
+  );
 }
 
 // src/rest/credential.rest.ts
@@ -133070,11 +133522,14 @@ function setup2() {
 // src/rest/keyword.rest.ts
 var PATH2 = "keyword";
 function setup3() {
-  app.get(`/${PATH2}`, asyncHandler(async (req, res) => {
-    const name = req.query.name;
-    const page = Number(req.query.page);
-    res.json(await doSearchKeywords(name, page));
-  }));
+  app.get(
+    `/${PATH2}`,
+    asyncHandler(async (req, res) => {
+      const name = req.query.name;
+      const page = Number(req.query.page);
+      res.json(await doSearchKeywords(name, page));
+    })
+  );
 }
 
 // src/rest/movie.rest.ts
@@ -133141,174 +133596,254 @@ var DiscoverMovieParams = class {
 // src/rest/movie.rest.ts
 var PATH3 = "movie";
 var MAX_PAGE = 500;
-var MAX_ATTEMPTS = 32;
+var MAX_ATTEMPTS = 16;
 function setup4() {
-  app.get(`/${PATH3}`, asyncHandler(async (req, res) => {
-    if (IS_DEBUG) {
-      const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-      console.log(`[DEBUG] <${timestamp}> ${req.sessionID}`);
-    }
-    const session2 = CurrentSession.getInstance().session;
-    import_assert13.default.ok(session2);
-    const queryParams = new DiscoverMovieParams(req.query);
-    queryParams.with_watch_monetization_types = "flatrate";
-    const isParamsChanged = JSON.stringify(queryParams) !== JSON.stringify(session2.queryParams);
-    if (isParamsChanged) {
-      session2.queryParams = new DiscoverMovieParams(queryParams);
-      session2.totalPages = (await discoverMovie(queryParams)).total_pages;
-    }
-    const directorMovieIds = [];
-    if (session2.queryParams?.with_crew) {
-      directorMovieIds.push(
-        ...await searchDirectorMovieIds(session2.queryParams.with_crew)
-      );
-    }
-    let result = null;
-    for (let i = 0; i < MAX_ATTEMPTS; i++) {
-      queryParams.page = getRandomNumber(session2.totalPages) + 1;
-      if (queryParams.page > MAX_PAGE) {
-        queryParams.page = getRandomNumber(MAX_PAGE) + 1;
+  app.get(
+    `/${PATH3}`,
+    asyncHandler(async (req, res) => {
+      const timestamp = () => (/* @__PURE__ */ new Date()).toISOString();
+      const session2 = CurrentSession.getInstance().session;
+      console.log(`[INFO] <${timestamp()}> - Session ID: ${req.session.id}`);
+      if (!session2) {
+        return res.status(401).json({ error: "Session not available" });
       }
-      const movie = await findMovie(queryParams, directorMovieIds);
-      if (movie) {
-        let searchMovieDetails = true;
-        const providers = await getMovieWatchProviders(movie.id);
+      if (DEBUG) {
+        console.log(
+          `[DEBUG] <${timestamp()}> [session: ${req.session.id}] - Incoming request with query:`,
+          req.query
+        );
+      }
+      const params = new DiscoverMovieParams(req.query);
+      params.with_watch_monetization_types = "flatrate";
+      const previousParams = session2.queryParams;
+      const isParamsChanged = JSON.stringify(params) !== JSON.stringify(previousParams);
+      if (isParamsChanged) {
+        session2.queryParams = new DiscoverMovieParams(params);
+        const discovery = await discoverMovie(params);
+        session2.totalPages = discovery.total_pages;
+      }
+      if (!session2.totalPages || session2.totalPages <= 0) {
+        return res.json(null);
+      }
+      const directorMovieIds = [];
+      if (session2.queryParams?.with_crew) {
+        directorMovieIds.push(
+          ...await searchDirectorMovieIds(
+            session2.queryParams.with_crew
+          )
+        );
+      }
+      let result = null;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const queryParams = new DiscoverMovieParams(session2.queryParams);
+        const randomPage = getRandomNumber(session2.totalPages) + 1;
+        queryParams.page = randomPage > MAX_PAGE ? getRandomNumber(MAX_PAGE) + 1 : randomPage;
+        const movie = await findMovie(
+          queryParams,
+          directorMovieIds
+        );
+        if (!movie) continue;
+        if (cacheService.has(session2.id, movie.id)) {
+          cacheService.increaseFailures(session2.id);
+          continue;
+        }
+        let shouldFetchDetails = true;
+        const watchProviders = await getMovieWatchProviders(movie.id);
         const country = queryParams.watch_region ?? CurrentSession.getInstance().country;
-        const providersPlain = queryParams.with_watch_monetization_types?.split("|") ?? void 0;
-        const searchProviders = queryParams.with_watch_providers?.split("|").map((id) => parseInt(id)) ?? void 0;
-        const countryProviders = providers.results?.get(country) ?? void 0;
-        searchMovieDetails = countryProviders !== void 0;
+        const providersPlain = queryParams.with_watch_monetization_types?.split("|");
+        const searchProviders = queryParams.with_watch_providers?.split("|").map((id) => parseInt(id)).filter((n3) => !Number.isNaN(n3));
+        const countryProviders = watchProviders.results?.get(country);
+        shouldFetchDetails = countryProviders !== void 0;
         if (providersPlain && countryProviders) {
-          for (let i2 = 0; i2 < providersPlain.length; i2++) {
-            const providers2 = countryProviders[providersPlain[i2]];
-            const ids = providers2?.map((p) => p.provider_id ?? -1).filter((i3) => i3 !== -1) ?? [];
-            searchMovieDetails = searchProviders ? ids.some((i3) => searchProviders.includes(i3)) : ids.length > 0;
-            if (searchMovieDetails) {
+          for (const type of providersPlain) {
+            const typedProviders = countryProviders[type];
+            const ids = typedProviders?.map((p) => p.provider_id ?? -1).filter((id) => id !== -1) ?? [];
+            const matches = searchProviders ? ids.some((id) => searchProviders.includes(id)) : ids.length > 0;
+            if (matches) {
+              shouldFetchDetails = true;
               break;
+            } else {
+              shouldFetchDetails = false;
             }
           }
         }
-        if (searchMovieDetails) {
-          const details = await getMovieDetails(movie.id);
-          if (details.overview === "") {
-            const fallback = await getMovieDetails(
-              movie.id,
-              "en-US"
-            );
-            details.overview = fallback.overview;
-          }
-          result = fromTheMovieDbToMovieDto(details);
-          break;
+        if (!shouldFetchDetails) continue;
+        const details = await getMovieDetails(movie.id);
+        if (!details.overview) {
+          const fallback = await getMovieDetails(
+            movie.id,
+            "en-US"
+          );
+          details.overview = fallback.overview;
         }
+        result = fromTheMovieDbToMovieDto(details);
+        break;
       }
-    }
-    if (result === null) {
-      if (IS_DEBUG) {
-        const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-        console.log(`[DEBUG] <${timestamp}> No movies found! Max attempts: ${MAX_ATTEMPTS}.`);
+      if (result) {
+        cacheService.add(session2.id, result.external_id);
       }
-    }
-    res.json(result);
-  }));
-  app.get(`/${PATH3}/:movieId/details`, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.params["movieId"]);
-    import_assert13.default.ok(movieId);
-    const movie = await getMovieDetails(movieId);
-    if (movie.overview === "") {
-      const fallback = await getMovieDetails(
-        movieId,
-        "en-US"
+      return res.json(result);
+    })
+  );
+  app.get(
+    `/${PATH3}/:movieId/details`,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.params["movieId"]);
+      import_assert13.default.ok(movieId);
+      const movie = await getMovieDetails(movieId);
+      if (movie.overview === "") {
+        const fallback = await getMovieDetails(movieId, "en-US");
+        movie.overview = fallback.overview;
+      }
+      res.json(fromTheMovieDbToMovieDto(movie));
+    })
+  );
+  app.get(
+    `/${PATH3}/:movieId/providers`,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.params["movieId"]);
+      const response = await getMovieWatchProviders(movieId);
+      const country = CurrentSession.getInstance().country;
+      res.json(response.results?.get(country) ?? null);
+    })
+  );
+  app.get(
+    `/${PATH3}/:movieId/credits`,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.params["movieId"]);
+      const response = await getMovieCredits(movieId);
+      res.json(response);
+    })
+  );
+  app.get(
+    `/${PATH3}/:movieId/videos`,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.params["movieId"]);
+      import_assert13.default.ok(movieId);
+      let video = await getMovieVideos(movieId);
+      if (video.results?.length === 0) {
+        video = await getMovieVideos(movieId, "en-US");
+      }
+      res.json(video);
+    })
+  );
+  app.get(
+    `/${PATH3}/watch-later`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const userId = Number(req.session.userId);
+      const movies = await getUserMoviesToWatchLater(
+        userId,
+        true
       );
-      movie.overview = fallback.overview;
-    }
-    res.json(fromTheMovieDbToMovieDto(movie));
-  }));
-  app.get(`/${PATH3}/:movieId/providers`, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.params["movieId"]);
-    const response = await getMovieWatchProviders(movieId);
-    const country = CurrentSession.getInstance().country;
-    res.json(response.results?.get(country) ?? null);
-  }));
-  app.get(`/${PATH3}/:movieId/credits`, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.params["movieId"]);
-    const response = await getMovieCredits(movieId);
-    res.json(response);
-  }));
-  app.get(`/${PATH3}/:movieId/videos`, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.params["movieId"]);
-    import_assert13.default.ok(movieId);
-    let video = await getMovieVideos(movieId);
-    if (video.results?.length === 0) {
-      video = await getMovieVideos(movieId, "en-US");
-    }
-    res.json(video);
-  }));
-  app.get(`/${PATH3}/watch-later`, authFilter, asyncHandler(async (req, res) => {
-    const userId = Number(req.session.userId);
-    const movies = await getUserMoviesToWatchLater(userId, true);
-    res.json(movies.map((i) => toDto(i)));
-  }));
-  app.put(`/${PATH3}/watch-later`, authFilter, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.query.id);
-    const userId = req.session.userId;
-    import_assert13.default.ok(userId);
-    await addMovieToWatchLater2(userId, movieId);
-    res.sendStatus(import_http_status_codes2.StatusCodes.OK);
-  }));
-  app.delete(`/${PATH3}/watch-later`, authFilter, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.query.id);
-    await removeMovieFromToWatchLaterByMovieId2(movieId);
-    res.sendStatus(import_http_status_codes2.StatusCodes.OK);
-  }));
-  app.get(`/${PATH3}/ignore`, authFilter, asyncHandler(async (req, res) => {
-    const userId = Number(req.session.userId);
-    const movies = await getUserIgnoredMovies(userId, true);
-    res.json(movies.map((i) => toDto(i)));
-  }));
-  app.put(`/${PATH3}/ignore`, authFilter, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.query.id);
-    const userId = req.session.userId;
-    import_assert13.default.ok(userId);
-    await addMovieToIgnore2(userId, movieId);
-    res.sendStatus(import_http_status_codes2.StatusCodes.OK);
-  }));
-  app.delete(`/${PATH3}/ignore`, authFilter, asyncHandler(async (req, res) => {
-    const movieId = parseInt(req.query.id);
-    await removeMovieToIgnore(movieId);
-    res.sendStatus(import_http_status_codes2.StatusCodes.OK);
-  }));
+      res.json(movies.map((i) => toDto(i)));
+    })
+  );
+  app.put(
+    `/${PATH3}/watch-later`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.query.id);
+      const userId = req.session.userId;
+      import_assert13.default.ok(userId);
+      await addMovieToWatchLater2(userId, movieId);
+      res.sendStatus(import_http_status_codes2.StatusCodes.OK);
+    })
+  );
+  app.delete(
+    `/${PATH3}/watch-later`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.query.id);
+      await removeMovieFromToWatchLaterByMovieId2(movieId);
+      res.sendStatus(import_http_status_codes2.StatusCodes.OK);
+    })
+  );
+  app.get(
+    `/${PATH3}/ignore`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const userId = Number(req.session.userId);
+      const movies = await getUserIgnoredMovies(
+        userId,
+        true
+      );
+      res.json(movies.map((i) => toDto(i)));
+    })
+  );
+  app.put(
+    `/${PATH3}/ignore`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.query.id);
+      const userId = req.session.userId;
+      import_assert13.default.ok(userId);
+      await addMovieToIgnore2(userId, movieId);
+      res.sendStatus(import_http_status_codes2.StatusCodes.OK);
+    })
+  );
+  app.delete(
+    `/${PATH3}/ignore`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const movieId = parseInt(req.query.id);
+      await removeMovieToIgnore(movieId);
+      res.sendStatus(import_http_status_codes2.StatusCodes.OK);
+    })
+  );
 }
 
 // src/rest/person.rest.ts
 var PATH4 = "person";
 function setup5() {
-  app.get(`/${PATH4}`, asyncHandler(async (req, res) => {
-    const name = req.query.name;
-    const page = Number(req.query.page);
-    const role = req.query.role;
-    const result = await searchPerson(name, page, role);
-    res.json(result);
-  }));
+  app.get(
+    `/${PATH4}`,
+    asyncHandler(async (req, res) => {
+      const name = req.query.name;
+      const page = Number(req.query.page);
+      const role = req.query.role;
+      const result = await searchPerson(
+        name,
+        page,
+        role
+      );
+      res.json(result);
+    })
+  );
+  app.get(
+    `/${PATH4}/:id`,
+    asyncHandler(async (req, res) => {
+      const id = parseInt(req.params["id"]);
+      const result = await searchPersonById(id);
+      res.json(result);
+    })
+  );
 }
 
 // src/rest/poster.rest.ts
 var PATH5 = "poster";
 function setup6() {
-  app.get(`/${PATH5}`, asyncHandler(async (req, res) => {
-    const path3 = req.query.path;
-    res.json(await getMoviePosterByPath(path3));
-  }));
+  app.get(
+    `/${PATH5}`,
+    asyncHandler(async (req, res) => {
+      const path3 = req.query.path;
+      res.json(await getMoviePosterByPath(path3));
+    })
+  );
 }
 
 // src/rest/token.rest.ts
 var import_http_status_codes3 = __toESM(require_cjs());
 var PATH6 = "token";
 function setup7() {
-  app.put(`/${PATH6}/consume/:tokenId`, asyncHandler(async (req, res) => {
-    const token = req.params["tokenId"];
-    await consumeToken(token);
-    res.sendStatus(import_http_status_codes3.StatusCodes.OK);
-  }));
+  app.put(
+    `/${PATH6}/consume/:tokenId`,
+    asyncHandler(async (req, res) => {
+      const token = req.params["tokenId"];
+      await consumeToken(token);
+      res.sendStatus(import_http_status_codes3.StatusCodes.OK);
+    })
+  );
 }
 
 // src/rest/user.rest.ts
@@ -133316,29 +133851,45 @@ var import_assert14 = __toESM(require("assert"));
 var import_http_status_codes4 = __toESM(require_cjs());
 var PATH7 = "user";
 function setup8() {
-  app.get(`/${PATH7}`, authFilter, asyncHandler(async (req, res) => {
-    const _session = req.session;
-    import_assert14.default.ok(_session.userId);
-    const user = await getUserById(_session.userId);
-    res.json(toDto3(user));
-  }));
-  app.get(`/${PATH7}/:id`, asyncHandler(async (req, res) => {
-    const user = await getUserById(parseInt(req.params["id"]));
-    res.json(toDto3(user));
-  }));
-  app.delete(`/${PATH7}`, authFilter, asyncHandler(async (req, res) => {
-    import_assert14.default.ok(req.session.userId);
-    await deleteUser(req.session.userId);
-    res.sendStatus(import_http_status_codes4.StatusCodes.OK);
-  }));
+  app.get(
+    `/${PATH7}`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      const _session2 = req.session;
+      import_assert14.default.ok(_session2.userId);
+      const user = await getUserById(_session2.userId);
+      res.json(toDto3(user));
+    })
+  );
+  app.get(
+    `/${PATH7}/:id`,
+    asyncHandler(async (req, res) => {
+      const user = await getUserById(
+        parseInt(req.params["id"])
+      );
+      res.json(toDto3(user));
+    })
+  );
+  app.delete(
+    `/${PATH7}`,
+    authFilter,
+    asyncHandler(async (req, res) => {
+      import_assert14.default.ok(req.session.userId);
+      await deleteUser(req.session.userId);
+      res.sendStatus(import_http_status_codes4.StatusCodes.OK);
+    })
+  );
 }
 
 // src/rest/utils.rest.ts
 var PATH8 = "utils";
 function setup9() {
-  app.get(`/${PATH8}/is-alive`, asyncHandler(async (req, res) => {
-    res.status(200).send("I'm alive!");
-  }));
+  app.get(
+    `/${PATH8}/is-alive`,
+    asyncHandler(async (req, res) => {
+      res.status(200).send("I'm alive!");
+    })
+  );
 }
 
 // src/rest/geolocation.rest.ts
@@ -133370,27 +133921,34 @@ function getLanguageFromCountryCode(countryCode) {
 // src/rest/geolocation.rest.ts
 var PATH9 = "geolocation";
 function setup10() {
-  const API = process.env.IP_API_ENDPOINT;
-  app.get(`/${PATH9}/:ip`, asyncHandler(async (req, res) => {
-    const ip = req.params["ip"];
-    if (ip !== void 0) {
-      const ipApiResponse = await axios_default.get(`${API}${ip}`);
-      const location2 = new LocationDto();
-      location2.country = ipApiResponse.data.countryCode;
-      location2.language = getLanguageFromCountryCode(location2.country);
-      return res.json(location2);
-    }
-    res.sendStatus(import_http_status_codes5.StatusCodes.INTERNAL_SERVER_ERROR);
-  }));
+  app.get(
+    `/${PATH9}`,
+    asyncHandler(async (req, res) => {
+      const ip = req.ip;
+      if (ip !== void 0) {
+        const ipApiResponse = await axios_default.get(
+          `${IP_API_ENDPOINT}${ip}`
+        );
+        const location2 = new LocationDto();
+        location2.country = ipApiResponse.data.countryCode;
+        location2.language = getLanguageFromCountryCode(location2.country);
+        return res.json(location2);
+      }
+      res.sendStatus(import_http_status_codes5.StatusCodes.INTERNAL_SERVER_ERROR);
+    })
+  );
 }
 
 // src/rest/provider.rest.ts
 var PATH10 = "provider";
 function setup11() {
-  app.get(`/${PATH10}/:country`, asyncHandler(async (req, res) => {
-    const country = req.params.country;
-    res.json(await getCountryProviders(country));
-  }));
+  app.get(
+    `/${PATH10}/:country`,
+    asyncHandler(async (req, res) => {
+      const country = req.params.country;
+      res.json(await getCountryProviders(country));
+    })
+  );
 }
 
 // src/services/agent.service.ts
@@ -133404,9 +133962,17 @@ async function invoke(userPrompt, country) {
   if (prompt === void 0) {
     throw new Error("Prompt is not configured");
   }
-  let finalPrompt = replaceMarkdown(prompt, MARKDOWN_USER_PROMPT, removeQuotes(userPrompt));
-  replaceMarkdown(finalPrompt, MARKDOWN_REQUEST_ID_HERE, (0, import_node_crypto10.randomUUID)());
-  if (IS_DEBUG) {
+  let finalPrompt = replaceMarkdown(
+    prompt,
+    MARKDOWN_USER_PROMPT,
+    removeQuotes(userPrompt)
+  );
+  replaceMarkdown(
+    finalPrompt,
+    MARKDOWN_REQUEST_ID_HERE,
+    (0, import_node_crypto10.randomUUID)()
+  );
+  if (DEBUG) {
     console.log(`[DEBUG] USER_PROMPT: ${userPrompt}`);
   }
   try {
@@ -133418,7 +133984,7 @@ async function invoke(userPrompt, country) {
         context: { country }
       }
     );
-    if (IS_DEBUG) {
+    if (DEBUG) {
       console.log(`[DEBUG] AGENT_FULL_RESPONSE: ${JSON.stringify(response)}`);
     }
     const lastMessage = response.messages[response.messages.length - 1];
@@ -133442,17 +134008,20 @@ var AgentRequestDto = class {
 // src/rest/agent.rest.ts
 var PATH11 = "agent";
 function setup12() {
-  app.post(`/${PATH11}`, asyncHandler(async (req, res) => {
-    const body = new AgentRequestDto(req.body);
-    if (body.prompt === void 0) {
-      throw new Error("prompt not found");
-    }
-    if (isMaxLength(body.prompt, 300)) {
-      throw new Error("prompt must not exceed 300 characters");
-    }
-    const sessionCountry = req.header("x-session-country") || "US";
-    res.json(await invoke(body.prompt, sessionCountry));
-  }));
+  app.post(
+    `/${PATH11}`,
+    asyncHandler(async (req, res) => {
+      const body = new AgentRequestDto(req.body);
+      if (body.prompt === void 0) {
+        throw new Error("prompt not found");
+      }
+      if (isMaxLength(body.prompt, 300)) {
+        throw new Error("prompt must not exceed 300 characters");
+      }
+      const sessionCountry = req.header("x-session-country") || "US";
+      res.json(await invoke(body.prompt, sessionCountry));
+    })
+  );
 }
 
 // src/server.ts
@@ -133502,25 +134071,100 @@ var TAG = function(version2) {
 \u255A\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u255D`;
 };
 
+// src/session/session-movie-cache-cleanup.service.ts
+var SessionCacheCleanupService = class {
+  constructor(cacheService2) {
+    this.cacheService = cacheService2;
+  }
+  // interval: 5 min
+  start() {
+    return setInterval(() => this.cleanup(/* @__PURE__ */ new Date()), 5 * 60 * 1e3);
+  }
+  cleanup(now) {
+    const sessionIds = this.cacheService.getAllCacheSession();
+    sessionIds.forEach((sessionId) => {
+      if (this.cacheService.isExpired(sessionId, now)) {
+        this.cacheService.removeSession(sessionId);
+      }
+    });
+  }
+};
+
+// src/session/session-movie-cache.service.ts
+var SessionMovieCacheService = class {
+  constructor() {
+    this.cache = /* @__PURE__ */ new Map();
+    this.life = 30 * 60 * 1e3;
+    // 30 minutes
+    this.maxMoviesPerSession = 100;
+    this.maxFailures = 64;
+  }
+  isExpired(sessionId, now) {
+    const session2 = this.cache.get(sessionId);
+    if (session2 === void 0) {
+      return void 0;
+    }
+    return now.getTime() - session2.createdAt.getTime() > this.life;
+  }
+  getAllCacheSession() {
+    return new Set(this.cache.keys());
+  }
+  has(sessionId, movieId) {
+    return this.cache.get(sessionId)?.ids.has(movieId) ?? false;
+  }
+  increaseFailures(sessionId) {
+    const session2 = this.cache.get(sessionId);
+    if (session2 === void 0) {
+      return;
+    }
+    session2.failures++;
+    if (session2.failures >= this.maxFailures) {
+      session2.failures = 0;
+      session2.ids.clear();
+    }
+  }
+  add(sessionId, movieId) {
+    if (!this.cache.has(sessionId)) {
+      this.cache.set(sessionId, {
+        createdAt: /* @__PURE__ */ new Date(),
+        failures: 0,
+        ids: /* @__PURE__ */ new Set()
+      });
+    }
+    const movies = this.cache.get(sessionId).ids;
+    if (movies.has(movieId)) {
+      return;
+    }
+    if (movies.size >= this.maxMoviesPerSession) {
+      const oldestMovie = movies.values().next().value;
+      movies.delete(oldestMovie);
+    }
+    movies.add(movieId);
+  }
+  removeSession(sessionId) {
+    this.cache.delete(sessionId);
+  }
+  size() {
+    return this.cache.size;
+  }
+};
+
 // src/server.ts
-var app = (0, import_express.default)();
 var ENV = process.env.NODE_ENV;
 import_assert15.default.ok(ENV);
 import_dotenv.default.config({
   path: `.env.${ENV}`
 });
-var VERSION4 = process.env.VERSION;
-var IS_DEBUG = process.env.DEBUG === "TRUE";
-var IS_AXIOS_DEBUG = process.env.AXIOS_DEBUG === "TRUE";
-console.log(TAG(VERSION4));
-console.log(`--> ${ENV?.toUpperCase()}`);
-var port = _parseInt(process.env.PORT);
-import_assert15.default.ok(port);
+var app = (0, import_express.default)();
 app.use(import_express.default.json());
-config3();
+init();
+init2();
+app.use(init3());
+app.use(getSession());
+console.log(TAG(VERSION));
+console.log(`--> ${ENV?.toUpperCase()}`);
 config();
-config2();
-config5();
+config3();
 app.use(interceptor);
 setup();
 setup2();
@@ -133535,22 +134179,23 @@ setup10();
 setup11();
 setup12();
 app.use(errorHandler);
-if (stringToBoolean(process.env.DATABASE_ENABLE_DB) && stringToBoolean(process.env.DATABASE_DROP)) {
+if (DATABASE_ENABLE_DB && DATABASE_DROP) {
   dropAndCreate().then(() => doMigrations());
 }
 if (ENV === "prod") {
   app.enable("trust proxy");
 }
-app.listen(port, () => {
-  console.log(`--> Server is running on port ${port}`);
+var cacheService = new SessionMovieCacheService();
+var cleanupService = new SessionCacheCleanupService(cacheService);
+cleanupService.start();
+app.listen(PORT, () => {
+  console.log(`--> Server is running on port ${PORT}`);
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ENV,
-  IS_AXIOS_DEBUG,
-  IS_DEBUG,
-  VERSION,
-  app
+  app,
+  cacheService
 });
 /*! Bundled license information:
 
