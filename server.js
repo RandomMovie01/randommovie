@@ -111212,7 +111212,7 @@ function init2() {
     },
     secret: "mrkn1M36(4*%51b",
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
       httpOnly: true,
       maxAge: 1e3 * 60 * 60 * 24,
@@ -133603,7 +133603,6 @@ function setup4() {
     asyncHandler(async (req, res) => {
       const timestamp = () => (/* @__PURE__ */ new Date()).toISOString();
       const session2 = CurrentSession.getInstance().session;
-      console.log(`[INFO] <${timestamp()}> - Session ID: ${req.session.id}`);
       if (!session2) {
         return res.status(401).json({ error: "Session not available" });
       }
